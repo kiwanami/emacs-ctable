@@ -68,8 +68,8 @@
 (defstruct ctbl:param 
   display-header ;; if t, display the header row with column models.
   fixed-header   ;; if t, display the header row in the header-line area.
-  vline-colors   ;; "#RRGGBB" or '((0 . colorstr) (t . default-color)) or (lambda (model col-index) t or nil)
-  hline-colors   ;; "#RRGGBB" or '((0 . colorstr) (t . default-color)) or (lambda (model row-index) t or nil)
+  vline-colors   ;; "#RRGGBB" or '((0 . colorstr) (t . default-color)) or (lambda (model col-index) colorstr or nil)
+  hline-colors   ;; "#RRGGBB" or '((0 . colorstr) (t . default-color)) or (lambda (model row-index) colorstr or nil)
   draw-vlines    ;; 'all or '(0 1 2 .. -1) or (lambda (model col-index) t or nil )
   draw-hlines    ;; 'all or '(0 1 2 .. -1) or (lambda (model row-index) t or nil )
   vertical-line horizontal-line ;; | -
