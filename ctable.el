@@ -661,6 +661,8 @@ bug), this function may return nil."
      ("g" . ctbl:action-update-buffer)
 
      ([mouse-1] . ctbl:navi-on-click)
+     ("C-m" . ctbl:navi-on-click)
+     ("RET" . ctbl:navi-on-click)
 
      )) "Keymap for the table-mode buffer.")
 
@@ -838,7 +840,7 @@ maximum width of the column models."
     (let* ((EOL "\n")
            (cmodels (ctbl:model-column-model model))
            (rows (ctbl:sort 
-                  (ctbl:model-data model) cmodels
+                  (copy-sequence (ctbl:model-data model)) cmodels
                   (ctbl:model-sort-state model)))
            (column-widths 
             (loop for c in cmodels
@@ -1191,33 +1193,40 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
           (lambda (model row-index)
             (cond ((memq row-index '(0 1 -1)) t)
                   (t (= 0 (% (1- row-index) 5))))))
-    (ctbl:open-table-buffer
-     :model
-     (make-ctbl:model
-      :column-model 
-      (list (make-ctbl:cmodel 
-             :title "A" :sorter 'ctbl:sort-number-lessp :min-width 5 :align 'right)
-            (make-ctbl:cmodel 
-             :title "Title" :align 'center
-             :sorter (lambda (a b) (ctbl:sort-number-lessp (length a) (length b))))
-            (make-ctbl:cmodel 
-             :title "Comment" :align 'left))
-      :data 
-      '((1  "Bon Tanaka" "8 Year Curry.")
-        (2  "Bon Tanaka" "Nan-ban Curry.")
-        (3  "Bon Tanaka" "Half Curry.")
-        (4  "Bon Tanaka" "Katsu Curry.")
-        (5  "Bon Tanaka" "Gyu-don.")
-        (6  "CoCo Ichi"  "Beaf Curry.")
-        (7  "CoCo Ichi"  "Poke Curry.")
-        (8  "CoCo Ichi"  "Yasai Curry.")
-        (9  "Berkley"    "Hamburger Curry.")
-        (10 "Berkley"    "Lunch set.")
-        (11 "Berkley"    "Coffee."))
-      :sort-state
-      '(2 1)
-      )
-     :param param)))
+    (let ((cp
+           (ctbl:create-table-component-buffer
+            :model
+            (make-ctbl:model
+             :column-model 
+             (list (make-ctbl:cmodel 
+                    :title "A" :sorter 'ctbl:sort-number-lessp
+                    :min-width 5 :align 'right)
+                   (make-ctbl:cmodel 
+                    :title "Title" :align 'center
+                    :sorter (lambda (a b) (ctbl:sort-number-lessp (length a) (length b))))
+                   (make-ctbl:cmodel 
+                    :title "Comment" :align 'left))
+             :data 
+             '((1  "Bon Tanaka" "8 Year Curry.")
+               (2  "Bon Tanaka" "Nan-ban Curry.")
+               (3  "Bon Tanaka" "Half Curry.")
+               (4  "Bon Tanaka" "Katsu Curry.")
+               (5  "Bon Tanaka" "Gyu-don.")
+               (6  "CoCo Ichi"  "Beaf Curry.")
+               (7  "CoCo Ichi"  "Poke Curry.")
+               (8  "CoCo Ichi"  "Yasai Curry.")
+               (9  "Berkley"    "Hamburger Curry.")
+               (10 "Berkley"    "Lunch set.")
+               (11 "Berkley"    "Coffee."))
+             :sort-state
+             '(2 1)
+             )
+            :param param)))
+      (ctbl:cp-add-click-hook cp (lambda () (message "CTable : Click Hook")))
+      (ctbl:cp-add-selection-change-hook cp (lambda () (message "CTable : Select Hook")))
+      (ctbl:cp-add-update-hook cp (lambda () (message "CTable : Update Hook")))
+      (switch-to-buffer (ctbl:cp-get-buffer cp)))))
+
 
 ;; (progn (eval-current-buffer) (ctbl:demo))
 ;; (progn (eval-current-buffer) (ctbl:test-all))
