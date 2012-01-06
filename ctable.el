@@ -59,8 +59,12 @@
 ;;   align : text alignment: 'left, 'right and 'center. (default: right)
 ;;   max-width : maximum width of the column. if nil, no constraint. (default: nil)
 ;;   min-width : minimum width of the column. if nil, no constraint. (default: nil)
+;;   click-hooks : a list of click action functions with two arguments
+;;                 the `ctbl:component' object and the `ctbl:cmodel' one.
+;;               (default: '(`ctbl:cmodel-sort-action'))
 
-(defstruct ctbl:cmodel title sorter align max-width min-width)
+(defstruct ctbl:cmodel title sorter align max-width min-width 
+  (click-hooks '(ctbl:cmodel-sort-action)))
 
 ;; ctbl:param / rendering parameters
 ;;   
@@ -164,6 +168,8 @@ If the text already has some keymap property, the text is skipped."
           (when (null nxt) (setq nxt end))
           (put-text-property pos (min nxt end) 'keymap keymap))))
 
+;; Model functions
+
 (defun ctbl:model-column-length (model)
   "[internal] Return the column number."
   (length (car (ctbl:model-data model))))
@@ -171,6 +177,29 @@ If the text already has some keymap property, the text is skipped."
 (defun ctbl:model-row-length (model)
   "[internal] Return the row number."
   (length (ctbl:model-data model)))
+
+(defun ctbl:model-modify-sort-key (model col-index)
+  "Modify the list of sort keys for the column headers."
+  (let* ((sort-keys (ctbl:model-sort-state model))
+         (col-key (1+ col-index)))
+    (cond
+     ((eq (car sort-keys) col-key)
+      (setf (ctbl:model-sort-state model)
+            (cons (- col-key) (cdr sort-keys))))
+     ((eq (car sort-keys) (- col-key))
+      (setf (ctbl:model-sort-state model)
+            (cons col-key (cdr sort-keys))))
+     (t
+      (setf (ctbl:model-sort-state model)
+            (cons col-key (delete (- col-key) 
+                                  (delete col-key sort-keys))))))
+    (ctbl:model-sort-state model)))
+
+(defun ctbl:cmodel-sort-action (cp col-index)
+  "Sorting action for click on the column headers"
+  (let* ((model (ctbl:cp-get-model cp)))
+    (ctbl:model-modify-sort-key model col-index)
+    (ctbl:cp-update cp)))
 
 
 ;;; Structures
@@ -627,7 +656,7 @@ bug), this function may return nil."
       (ctbl:cp-set-selected-cell cp cell-id))))
 
 (defun ctbl:navi-on-click ()
-  "click"
+  "Action handler on the cells."
   (interactive)
   (let ((cp (ctbl:cp-get-component))
         (cell-id (ctbl:cursor-to-nearest-cell)))
@@ -636,11 +665,46 @@ bug), this function may return nil."
       (ctbl:cp-fire-click-hooks cp))))
 
 (defun ctbl:action-update-buffer ()
-  "Update the current table."
+  "Update action for the latest table model."
   (interactive)
   (let ((cp (ctbl:cp-get-component)))
     (when cp
       (ctbl:cp-update cp))))
+
+(defun ctbl:action-column-header ()
+  "Action handler on the header columns. (for normal key events)"
+  (interactive)
+  (ctbl:fire-column-header-action
+   (ctbl:cp-get-component)
+   (get-text-property (point) 'ctbl:col-id)))
+
+(defun ctbl:fire-column-header-action (cp col-id)
+  "[internal] Execute action handlers on the header columns."
+  (when (and cp col-id)
+    (loop with cmodel = (nth col-id (ctbl:model-column-model (ctbl:cp-get-model cp)))
+          for f in (ctbl:cmodel-click-hooks cmodel)
+          do (condition-case err
+                 (funcall f cp col-id)
+               (nil (message "Ctable: Header Click / Hook error %S [%s]" 
+                             f err))))))
+
+(defun ctbl:render-column-header-keymap (col-id)
+  "[internal] Generate action handler on the header columns. (for header-line-format)"
+  (lexical-let ((col-id col-id))
+    (let ((keymap (copy-keymap ctbl:column-header-keymap)))
+      (define-key keymap [header-line mouse-1]
+        (lambda () 
+          (interactive)
+          (ctbl:fire-column-header-action (ctbl:cp-get-component) col-id)))
+      keymap)))
+
+(defvar ctbl:column-header-keymap
+  (ctbl:define-keymap
+   '(([mouse-1] . ctbl:action-column-header)
+     ("C-m" . ctbl:action-column-header)
+     ("RET" . ctbl:action-column-header)
+     ))
+  "Keymap for the header columns.")
 
 (defvar ctbl:table-mode-map 
   (ctbl:define-keymap
@@ -859,9 +923,14 @@ maximum width of the column models."
               (loop for cm in cmodels
                     for i from 0
                     for cw in column-widths
-                    collect (ctbl:format-center cw (ctbl:cmodel-title cm)))
+                    collect 
+                    (propertize
+                     (ctbl:format-center cw (ctbl:cmodel-title cm))
+                     'ctbl:col-id i 
+                     'local-map (ctbl:render-column-header-keymap i)
+                     'mouse-face 'highlight))
               model param)))
-        (cond
+        (cond ;; (nth 2 mode-line-modes)
          ((and (eq 'buffer (ctbl:dest-type dest))
                (ctbl:param-fixed-header param))
           ;; buffer header-line
@@ -1058,6 +1127,7 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
 (defun ctbl:test-all ()
   (interactive)
   (ctbl:test-sort)
+  (ctbl:test-modify-sort-key)
   (ctbl:test-render-join)
   (ctbl:test-make-hline)
   )
@@ -1108,6 +1178,24 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
           do (insert (format "NG : Keys %S -> sorted %S\n" keys sorted)))))
 
 ;; (ctbl:test-sort)
+
+(defun ctbl:test-modify-sort-key ()
+  (interactive)
+  (let ((model (make-ctbl:model :data 'data :sort-state nil))
+        (tests 
+         '((0 . (1))     (0 . (-1))    (0 . (1))
+           (1 . (2 1))   (1 . (-2 1))  (1 . (2 1))
+           (2 . (3 2 1)) (0 . (1 3 2)) (0 . (-1 3 2)) (1 . (2 -1 3))
+           (0 . (1 2 3)))))
+    (ctbl:test-get-buffer)
+    (loop for (col-index . order) in tests
+          for keys = (ctbl:model-modify-sort-key model col-index)
+          if (equal order keys)
+          do (insert (format "OK : Col %s | Keys %S\n" col-index keys))
+          else
+          do (insert (format "NG : Col %s | Keys %S -> sorted %S\n" col-index order keys)))))
+
+;; (ctbl:test-modify-sort-key)
 
 (defun ctbl:test-render-join ()
   (lexical-let*
@@ -1230,6 +1318,5 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
 
 ;; (progn (eval-current-buffer) (ctbl:demo))
 ;; (progn (eval-current-buffer) (ctbl:test-all))
-
 (provide 'ctable)
 ;;; ctable.el ends here
