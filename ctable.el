@@ -72,6 +72,7 @@
 (defstruct ctbl:param 
   display-header ;; if t, display the header row with column models.
   fixed-header   ;; if t, display the header row in the header-line area.
+  bg-colors      ;; '(((row-id . col-id) . colorstr) (t . default-color) ... ) or (lambda (model row-id col-id) colorstr or nil)
   vline-colors   ;; "#RRGGBB" or '((0 . colorstr) (t . default-color)) or (lambda (model col-index) colorstr or nil)
   hline-colors   ;; "#RRGGBB" or '((0 . colorstr) (t . default-color)) or (lambda (model row-index) colorstr or nil)
   draw-vlines    ;; 'all or '(0 1 2 .. -1) or (lambda (model col-index) t or nil )
@@ -85,6 +86,7 @@
   (make-ctbl:param
    :display-header      t
    :fixed-header        nil
+   :bg-colors           nil
    :vline-colors        "DarkGray"
    :hline-colors        "DarkGray"
    :draw-vlines         'all
@@ -802,6 +804,30 @@ maximum width of the column models."
                      (assq t param))))
         (if val (cdr val) nil)))))
 
+(defun ctbl:render-bg-color (str row-id col-id model param)
+  "[internal] Return nil or the color string at the cell (row-id . cell-id)."
+  (let ((bgc-param (ctbl:param-bg-colors param)))
+    (cond
+     ((null bgc-param) nil)
+     ((functionp bgc-param)
+      (funcall bgc-param model row-id col-id str))
+     (t
+      (let ((pair (or (assoc (cons row-id col-id) bgc-param)
+                      (assoc t bgc-param))))
+        (if pair (cdr pair) nil))))))
+
+(defun ctbl:render-bg-color-put (str row-id col-id model param)
+  "[internal] Return the string with the background face."
+  (let ((bgcolor (ctbl:render-bg-color str row-id col-id model param)))
+    (if bgcolor
+        (let ((org-face (get-text-property 0 'face str)))
+          (propertize 
+           (copy-sequence str)
+           'face (if org-face
+                     (append org-face (list ':background  bgcolor))
+                   (list ':background  bgcolor))))
+      str)))
+
 (defun ctbl:render-line-color (str model param index)
   "[internal] Return the propertize string."
   (propertize (copy-sequence str)
@@ -930,7 +956,7 @@ maximum width of the column models."
                      'local-map (ctbl:render-column-header-keymap i)
                      'mouse-face 'highlight))
               model param)))
-        (cond ;; (nth 2 mode-line-modes)
+        (cond
          ((and (eq 'buffer (ctbl:dest-type dest))
                (ctbl:param-fixed-header param))
           ;; buffer header-line
@@ -954,9 +980,11 @@ maximum width of the column models."
                     for s = (if (stringp i) i (format "%s" i))
                     for fmt in column-format
                     for col-index from 0
+                    for str = (ctbl:render-bg-color-put
+                               (funcall fmt i) row-index col-index 
+                               model param)
                     collect 
-                    (ctbl:tp (funcall fmt i) 
-                             'ctbl:cell-id (cons row-index col-index)))
+                    (ctbl:tp str 'ctbl:cell-id (cons row-index col-index)))
               model param) EOL))
       (insert (ctbl:render-make-hline
                column-widths model param -1))))
@@ -1127,6 +1155,7 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
 (defun ctbl:test-all ()
   (interactive)
   (ctbl:test-sort)
+  (ctbl:test-bg-colors)
   (ctbl:test-modify-sort-key)
   (ctbl:test-render-join)
   (ctbl:test-make-hline)
@@ -1141,6 +1170,7 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
     (erase-buffer))
    (t (insert "--------------------------------------------------\n")))
   (get-buffer ctbl:test-buffer-name))
+
 
 (defun ctbl:test-sort ()
   "[internal] Test function for `ctbl:sort'."
@@ -1238,6 +1268,45 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
 
 ;; (ctbl:test-render-join)
 
+(defun ctbl:test-bg-colors ()
+  (let* ((param (copy-ctbl:param ctbl:default-rendering-param))
+         (model 'model) ; dummy
+         (tests 
+          (list
+           (cons '((0 0 nil) (1 1 nil))
+                 nil)
+           (cons '((0 0 "black") (1 1 "white"))
+                 '(((0 . 0) . "black") (t . "white")))
+           (cons '((0 0 "blue") (1 1 "red"))
+                 (lambda (m row-id col-id str)
+                   (let ((pair (cons row-id col-id)))
+                     (cond
+                      ((equal '(0 . 0) pair)
+                       "blue")
+                      ((equal '(1 . 1) pair)
+                       "red")
+                      (t (error "BUG %S" pair))))))
+           (cons '((0 0 nil) (1 0 "green") (2 0 nil) (3 0 "green"))
+                 (lambda (m row-id col-id str)
+                   (cond
+                    ((= 0 (% row-id 2)) nil)
+                    (t "green")))))))
+    (ctbl:test-get-buffer)
+    (loop for (samples . test) in tests 
+          for test-id from 1 do
+          (setf (ctbl:param-bg-colors param) test)
+          (loop for (row-id col-id exp) in samples
+                for enum-id from 1
+                for res = (condition-case err
+                              (ctbl:render-bg-color 
+                               "dummy" row-id col-id model param ) (t err))
+                if (equal res exp)
+                do (insert (format "OK [%s-%s] %s\n" test-id enum-id res))
+                else
+                do (insert (format "NG [%s-%s] %s -> %s | %S\n" test-id enum-id exp res ))))))
+
+;; (ctbl:test-bg-colors)
+
 (defun ctbl:test-make-hline ()
   (let*
       ((param (copy-ctbl:param ctbl:default-rendering-param))
@@ -1281,6 +1350,11 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
           (lambda (model row-index)
             (cond ((memq row-index '(0 1 -1)) t)
                   (t (= 0 (% (1- row-index) 5))))))
+    (setf (ctbl:param-bg-colors param)
+          (lambda (model row-id col-id str)
+            (cond ((string-match "CoCo" str) "LightPink")
+                  ((= 0 (% (1- row-index) 2)) "Darkseagreen1")
+                  (t nil))))
     (let ((cp
            (ctbl:create-table-component-buffer
             :model
