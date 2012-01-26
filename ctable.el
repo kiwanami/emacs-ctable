@@ -342,6 +342,29 @@ the calfw is responsible to manage the buffer and key maps."
     (delete-region begin (1- end)))
   (goto-char begin))
 
+;; Inline text
+
+(defconst ctbl:dest-background-buffer " *ctbl:dest-background*")
+
+(defun ctbl:dest-init-inline (width height)
+  "Create a text destination."
+  (lexical-let
+      ((buffer (get-buffer-create ctbl:dest-background-buffer))
+       (window (selected-window))
+       dest)
+    (setq dest
+          (make-ctbl:dest
+           :type 'text
+           :min-func 'point-min
+           :max-func 'point-max
+           :buffer buffer
+           :width (or width (window-width window))
+           :height (or height (window-height window))
+           :clear-func (lambda ()
+                         (with-current-buffer buffer
+                           (erase-buffer)))))
+    dest))
+
 ;; private functions
 
 (defun ctbl:dest-ol-selection-clear (dest)
@@ -1147,6 +1170,25 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
         (setf (ctbl:dest-after-update-func dest) after-update-func)
         (funcall after-update-func)
         cp))))
+
+
+;; inline
+
+(defun* ctbl:get-table-text(&key width height model param)
+  "Return a text that is drew the table view.
+
+In this case, the rendering destination object is disposable. So, 
+one can not modify the obtained text with `ctbl:xxx' functions.
+
+WIDTH and HEIGHT are reference size of the table view."
+  (let* ((dest (ctbl:dest-init-inline width height))
+         (cp (ctbl:cp-new dest model param))
+         text)
+    (setq text
+          (with-current-buffer (ctbl:cp-get-buffer cp)
+            (buffer-substring (point-min) (point-max))))
+    (kill-buffer (ctbl:cp-get-buffer cp))
+    text))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
