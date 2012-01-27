@@ -782,9 +782,9 @@ bug), this function may return nil."
 
 ;; Rendering
 
-(defun ctbl:render-check-cell-width (rows cmodels column-width)
+(defun ctbl:render-check-cell-width (rows cmodels column-widths)
   "[internal] Return a list of rows. This function makes side effects:
-cell widths are stored at COLUMN-WIDTH, longer cell strings are truncated by
+cell widths are stored at COLUMN-WIDTHS, longer cell strings are truncated by
 maximum width of the column models."
   (loop for row in rows collect 
         (loop for c in row 
