@@ -35,6 +35,37 @@
   (get-buffer ctbl:test-buffer-name))
 
 
+
+;; test code
+
+(defun ctbl:test-adjust-widths ()
+  "[internal] Test function for `ctbl:render-adjust-cell-width'."
+  (interactive)
+  (let ((cmodels 
+         (list (make-ctbl:cmodel)
+               (make-ctbl:cmodel :min-width 5)
+               (make-ctbl:cmodel :max-width 5)))
+        (init-column-widths '(1 6 3)) ; total = 10
+        (tests
+         '( ; (total-width . (result widths))
+           (nil . (1 6 3))
+           (13  . (2 7 4)) ; res:3 -> 1
+           (21  . (6 10 5)) ; res:11 -> 3...2 
+           (8   . (1 5 2)) ; res:-2 -> 1
+           (6   . (1 5 1)) ; res:-4 -> 1
+           )))
+    
+    (ctbl:test-get-buffer)
+    (loop for (total-width . expected-widths) in tests
+          for result = (ctbl:render-adjust-cell-width 
+                        cmodels (copy-sequence init-column-widths) total-width)
+          if (equal result expected-widths)
+          do (insert (format "OK : cols %S\n" expected-widths))
+          else
+          do (insert (format "NG : Expected %S -> Result %S\n" expected-widths result)))))
+
+;; (ctbl:test-adjust-widths)
+
 (defun ctbl:test-sort ()
   "[internal] Test function for `ctbl:sort'."
   (interactive)

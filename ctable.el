@@ -44,6 +44,7 @@
 ;;; Models and Parameters
 
 ;; ctbl:model / table model structure
+;;
 ;;   data : Table data as a list of rows. A row contains a list of columns.
 ;;   column-model : A list of column models.
 ;;   sort-state : The current sort order as a list of column indexes.
@@ -53,6 +54,7 @@
 (defstruct ctbl:model data column-model sort-state)
 
 ;; ctbl:cmodel / table column model structure
+;;
 ;;   title : title string.
 ;;   sorter : sorting function which transforms a cell value into sort value.
 ;;            It should return -1, 0 and 1. If nil, `ctbl:sort-string-lessp' is used.
@@ -801,6 +803,73 @@ maximum width of the column models."
                   (setf (nth i column-widths) (string-width val)))
                 val))))
 
+(defun ctbl:render-adjust-cell-width (cmodels column-widths total-width)
+  "[internal] Adjust column widths and return a list of column widths.
+If TOTAL-WIDTH is nil, this function just returns COLUMN-WIDTHS.
+If TOTAL-WIDTHS is shorter than sum of COLUMN-WIDTHS, this
+function expands columns.  The residual width is distributed over
+the columns.  If TOTAL-WIDTHS is longer than sum of
+COLUMN-WIDTHS, this function shrinks columns to reduce the
+surplus width."
+  (let ((init-total (loop for i in column-widths sum i)))
+    (cond
+     ((or (null total-width)
+          (= total-width init-total)) column-widths)
+     ((< total-width init-total)
+      (ctbl:render-adjust-cell-width-shrink 
+       cmodels column-widths total-width init-total))
+     (t
+      (ctbl:render-adjust-cell-width-expand
+       cmodels column-widths total-width init-total)))))
+
+(defun ctbl:render-adjust-cell-width-shrink (cmodels column-widths total-width init-total )
+  "[internal] shrink column widths."
+  (let* ((column-widths (copy-sequence column-widths))
+         (column-indexes (loop for i from 0 below (length cmodels) collect i))
+         (residual (- init-total total-width)))
+    (loop for cnum = (length column-indexes)
+          until (or (= 0 cnum) (= 0 residual))
+          do
+          (setq ave-shrink (max 1 (/ residual cnum)))
+          (loop for idx in column-indexes
+                for cmodel = (nth idx cmodels)
+                for cwidth = (nth idx column-widths)
+                for min-width = (or (ctbl:cmodel-min-width cmodel) 1)
+                do
+                (cond
+                 ((<= residual 0) (return)) ; complete
+                 ((<= cwidth min-width)     ; reject
+                  (setq column-indexes (delete idx column-indexes)))
+                 (t ; reduce
+                  (let ((next-width (max 1 (- cwidth ave-shrink))))
+                    (incf residual (- next-width cwidth))
+                    (setf (nth idx column-widths) next-width))))))
+    column-widths))
+
+(defun ctbl:render-adjust-cell-width-expand (cmodels column-widths total-width init-total )
+  "[internal] expand column widths."
+  (let* ((column-widths (copy-sequence column-widths))
+         (column-indexes (loop for i from 0 below (length cmodels) collect i))
+         (residual (- total-width init-total)))
+    (loop for cnum = (length column-indexes)
+          until (or (= 0 cnum) (= 0 residual))
+          do
+          (setq ave-expand (max 1 (/ residual cnum)))
+          (loop for idx in column-indexes
+                for cmodel = (nth idx cmodels)
+                for cwidth = (nth idx column-widths)
+                for max-width = (or (ctbl:cmodel-max-width cmodel) total-width)
+                do
+                (cond
+                 ((<= residual 0) (return)) ; complete
+                 ((<= max-width cwidth)     ; reject
+                  (setq column-indexes (delete idx column-indexes)))
+                 (t ; expand
+                  (let ((next-width (min max-width (+ cwidth ave-expand))))
+                    (incf residual (- cwidth next-width))
+                    (setf (nth idx column-widths) next-width))))))
+    column-widths))
+
 (defun ctbl:render-get-formats (cmodels column-widths)
   "[internal] Return a list of the format functions."
   (loop for cw in column-widths
@@ -948,6 +1017,27 @@ maximum width of the column models."
     ;; join them
     (mapconcat 'identity (reverse ret) "")))
 
+(defun ctbl:render-sum-vline-widths (cmodels model param)
+  "[internal] Return a sum of the widths of vertical lines."
+  (let ((sum 0))
+    ;; left border line
+    (when (ctbl:render-draw-vline-p model (ctbl:param-draw-vlines param) 0)
+      (incf sum))
+    ;; content line
+    (loop with param-vl = (ctbl:param-draw-vlines param)
+          with endi = (length cmodels)
+          for i from 1 upto (length cmodels)
+          for endp = (equal i endi) do
+          (when (and (ctbl:render-draw-vline-p 
+                      model (ctbl:param-draw-vlines param) i)
+                     (not endp))
+            (incf sum)))
+    ;; right border line
+    (when (ctbl:render-draw-vline-p
+           model (ctbl:param-draw-vlines param) -1)
+      (incf sum))
+    sum))
+
 (defun ctbl:render-main (dest model param)
   "[internal] Rendering the table view."
     (let* ((EOL "\n")
@@ -963,6 +1053,13 @@ maximum width of the column models."
            column-format)
       ;; check cell widths
       (setq rows (ctbl:render-check-cell-width rows cmodels column-widths))
+      ;; adjust cell widths for ctbl:dest width
+      (setq column-widths 
+            (ctbl:render-adjust-cell-width 
+             cmodels column-widths 
+             (- (ctbl:dest-width dest)
+                (ctbl:render-sum-vline-widths 
+                 cmodels model param))))
       (erase-buffer)
       (setq column-format (ctbl:render-get-formats cmodels column-widths))
 
@@ -1117,16 +1214,17 @@ sides with the character PADDING."
 
 ;; buffer
 
-(defun* ctbl:open-table-buffer(&key buffer custom-map model param)
+(defun* ctbl:open-table-buffer(&key buffer width height custom-map model param)
   "Open a table buffer simply.
 This function uses the function
 `ctbl:create-table-component-buffer' internally."
   (interactive)
   (let ((cp (ctbl:create-table-component-buffer
-             :buffer buffer :custom-map custom-map :model model :param param)))
+             :buffer buffer :width width :height height 
+             :custom-map custom-map :model model :param param)))
     (switch-to-buffer (ctbl:cp-get-buffer cp))))
 
-(defun* ctbl:create-table-component-buffer(&key buffer custom-map model param)
+(defun* ctbl:create-table-component-buffer(&key buffer width height custom-map model param)
   "Return a table buffer with some customize parameters.
 
 This function binds the component object at the
@@ -1135,7 +1233,7 @@ buffer local variable `ctbl:component'.
 The size of table is calculated from the window that shows BUFFER or the selected window.
 BUFFER is the buffer to be rendered. If BUFFER is nil, this function creates a new buffer.
 CUSTOM-MAP is the additional keymap that is added to default keymap `ctbl:table-mode-map'."
-  (let* ((dest  (ctbl:dest-init-buffer buffer nil nil custom-map))
+  (let* ((dest  (ctbl:dest-init-buffer buffer width height custom-map))
          (cp (ctbl:cp-new dest model param)))
     (with-current-buffer (ctbl:dest-buffer dest)
       (set (make-local-variable 'ctbl:component) cp))
@@ -1213,6 +1311,7 @@ WIDTH and HEIGHT are reference size of the table view."
                   (t nil))))
     (let ((cp
            (ctbl:create-table-component-buffer
+            :width 50
             :model
             (make-ctbl:model
              :column-model 
