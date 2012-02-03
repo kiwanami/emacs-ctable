@@ -1,9 +1,9 @@
 ;;; test-ctable.el --- tests for ctable
 
-;; Copyright (C) 2012  
+;; Copyright (C) 2012 SAKURAI Masashi
 
 ;; Author:  <m.sakurai at kiwanami.net>
-;; Keywords: 
+;; Keywords: test
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 
 ;;; Commentary:
 
-;; 
+;;
 
 ;;; Code:
 
@@ -41,7 +41,7 @@
 (defun ctbl:test-adjust-widths ()
   "[internal] Test function for `ctbl:render-adjust-cell-width'."
   (interactive)
-  (let ((cmodels 
+  (let ((cmodels
          (list (make-ctbl:cmodel)
                (make-ctbl:cmodel :min-width 5)
                (make-ctbl:cmodel :max-width 5)))
@@ -50,14 +50,14 @@
          '( ; (total-width . (result widths))
            (nil . (1 6 3))
            (13  . (2 7 4)) ; res:3 -> 1
-           (21  . (6 10 5)) ; res:11 -> 3...2 
+           (21  . (6 10 5)) ; res:11 -> 3...2
            (8   . (1 5 2)) ; res:-2 -> 1
            (6   . (1 5 1)) ; res:-4 -> 1
            )))
-    
+
     (ctbl:test-get-buffer)
     (loop for (total-width . expected-widths) in tests
-          for result = (ctbl:render-adjust-cell-width 
+          for result = (ctbl:render-adjust-cell-width
                         cmodels (copy-sequence init-column-widths) total-width)
           if (equal result expected-widths)
           do (insert (format "OK : cols %S\n" expected-widths))
@@ -69,7 +69,7 @@
 (defun ctbl:test-sort ()
   "[internal] Test function for `ctbl:sort'."
   (interactive)
-  (let ((cmodels 
+  (let ((cmodels
          (list (make-ctbl:cmodel :sorter 'ctbl:sort-number-lessp)
                (make-ctbl:cmodel :sorter 'ctbl:sort-string-lessp)
                (make-ctbl:cmodel)))
@@ -106,7 +106,7 @@
 (defun ctbl:test-modify-sort-key ()
   (interactive)
   (let ((model (make-ctbl:model :data 'data :sort-state nil))
-        (tests 
+        (tests
          '((0 . (1))     (0 . (-1))    (0 . (1))
            (1 . (2 1))   (1 . (-2 1))  (1 . (2 1))
            (2 . (3 2 1)) (0 . (1 3 2)) (0 . (-1 3 2)) (1 . (2 -1 3))
@@ -128,7 +128,7 @@
        (src '("11" "22" "33" "44"))
        (tests
         (list
-         (cons "|11|22|33|44|" 
+         (cons "|11|22|33|44|"
                (lambda ()
                  (setf (ctbl:param-vline-colors param) "DarkGray")
                  (setf (ctbl:param-draw-vlines param) 'all)
@@ -145,11 +145,11 @@
                  (ctbl:render-join-columns (copy-sequence src) model param)))
          (cons "|1122|3344|"
                (lambda ()
-                 (setf (ctbl:param-vline-colors param) 
+                 (setf (ctbl:param-vline-colors param)
                        (lambda (model col-index)
                          (nth col-index '("Gray" "White" "Pink"))))
-                 (setf (ctbl:param-draw-vlines param) 
-                       (lambda (model col-index) 
+                 (setf (ctbl:param-draw-vlines param)
+                       (lambda (model col-index)
                          (memq col-index '(0 -1 2))))
                  (ctbl:render-join-columns (copy-sequence src) model param))))))
     (ctbl:test-get-buffer)
@@ -165,7 +165,7 @@
 (defun ctbl:test-bg-colors ()
   (let* ((param (copy-ctbl:param ctbl:default-rendering-param))
          (model 'model) ; dummy
-         (tests 
+         (tests
           (list
            (cons '((0 0 nil) (1 1 nil))
                  nil)
@@ -186,13 +186,13 @@
                     ((= 0 (% row-id 2)) nil)
                     (t "green")))))))
     (ctbl:test-get-buffer)
-    (loop for (samples . test) in tests 
+    (loop for (samples . test) in tests
           for test-id from 1 do
           (setf (ctbl:param-bg-colors param) test)
           (loop for (row-id col-id exp) in samples
                 for enum-id from 1
                 for res = (condition-case err
-                              (ctbl:render-bg-color 
+                              (ctbl:render-bg-color
                                "dummy" row-id col-id model param ) (t err))
                 if (equal res exp)
                 do (insert (format "OK [%s-%s] %s\n" test-id enum-id res))
@@ -235,6 +235,7 @@
 
 (defun ctbl:test-all ()
   (interactive)
+  (ctbl:test-adjust-widths)
   (ctbl:test-sort)
   (ctbl:test-bg-colors)
   (ctbl:test-modify-sort-key)

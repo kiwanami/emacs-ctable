@@ -1,6 +1,6 @@
 ;;; ctable.el --- Table component for Emacs Lisp
 
-;; Copyright (C) 2011  
+;; Copyright (C) 2011 SAKURAI Masashi
 
 ;; Author:  <m.sakurai at kiwanami.net>
 ;; Keywords: table
@@ -65,13 +65,13 @@
 ;;                 the `ctbl:component' object and the `ctbl:cmodel' one.
 ;;               (default: '(`ctbl:cmodel-sort-action'))
 
-(defstruct ctbl:cmodel title sorter align max-width min-width 
+(defstruct ctbl:cmodel title sorter align max-width min-width
   (click-hooks '(ctbl:cmodel-sort-action)))
 
 ;; ctbl:param / rendering parameters
-;;   
+;;
 
-(defstruct ctbl:param 
+(defstruct ctbl:param
   display-header ;; if t, display the header row with column models.
   fixed-header   ;; if t, display the header row in the header-line area.
   bg-colors      ;; '(((row-id . col-id) . colorstr) (t . default-color) ... ) or (lambda (model row-id col-id) colorstr or nil)
@@ -84,7 +84,7 @@
   top-junction bottom-junction left-junction right-junction cross-junction ;; +
   )
 
-(defvar ctbl:default-rendering-param 
+(defvar ctbl:default-rendering-param
   (make-ctbl:param
    :display-header      t
    :fixed-header        nil
@@ -129,12 +129,12 @@
 (defun ctbl:define-keymap (keymap-list &optional prefix)
   "[internal] Keymap utility."
   (let ((map (make-sparse-keymap)))
-    (mapc 
+    (mapc
      (lambda (i)
        (define-key map
          (if (stringp (car i))
-             (read-kbd-macro 
-              (if prefix 
+             (read-kbd-macro
+              (if prefix
                   (replace-regexp-in-string "prefix" prefix (car i))
                 (car i)))
            (car i))
@@ -195,7 +195,7 @@ If the text already has some keymap property, the text is skipped."
             (cons col-key (cdr sort-keys))))
      (t
       (setf (ctbl:model-sort-state model)
-            (cons col-key (delete (- col-key) 
+            (cons col-key (delete (- col-key)
                                   (delete col-key sort-keys))))))
     (ctbl:model-sort-state model)))
 
@@ -223,7 +223,7 @@ If the text already has some keymap property, the text is skipped."
 ;; selection-change-hooks : a list of hook functions for selection change event
 ;; click-hooks            : a list of hook functions for click event
 
-(defstruct ctbl:component dest model selected param 
+(defstruct ctbl:component dest model selected param
   update-hooks selection-change-hooks click-hooks)
 
 
@@ -385,7 +385,7 @@ the calfw is responsible to manage the buffer and key maps."
        dest row-id
        (lambda (tcell-id begin end)
          (let ((overlay (make-overlay begin end)))
-           (overlay-put overlay 'face 
+           (overlay-put overlay 'face
                         (if (= (cdr tcell-id) col-id)
                             'ctbl:face-cell-select
                           'ctbl:face-row-select))
@@ -578,7 +578,7 @@ at functions for putting overlays."
 
 (defun ctbl:find-first-cell (dest)
   "[internal] Return the first cell in the current buffer."
-  (let ((pos (next-single-property-change 
+  (let ((pos (next-single-property-change
               (ctbl:dest-point-min dest) 'ctbl:cell-id)))
     (and pos (ctbl:cursor-to-cell pos))))
 
@@ -602,7 +602,7 @@ bug), this function may return nil."
       (let* ((r (lambda () (when (not (eolp)) (forward-char))))
              (l (lambda () (when (not (bolp)) (backward-char))))
              (u (lambda () (when (not (bobp)) (line-move 1))))
-             (d (lambda () (when (not (eobp)) (line-move -1)))) 
+             (d (lambda () (when (not (eobp)) (line-move -1))))
              (dest (ctbl:component-dest (ctbl:cp-get-component)))
              get)
         (setq get (lambda (cmds)
@@ -712,7 +712,7 @@ bug), this function may return nil."
           for f in (ctbl:cmodel-click-hooks cmodel)
           do (condition-case err
                  (funcall f cp col-id)
-               (nil (message "Ctable: Header Click / Hook error %S [%s]" 
+               (nil (message "Ctable: Header Click / Hook error %S [%s]"
                              f err))))))
 
 (defun ctbl:render-column-header-keymap (col-id)
@@ -720,7 +720,7 @@ bug), this function may return nil."
   (lexical-let ((col-id col-id))
     (let ((keymap (copy-keymap ctbl:column-header-keymap)))
       (define-key keymap [header-line mouse-1]
-        (lambda () 
+        (lambda ()
           (interactive)
           (ctbl:fire-column-header-action (ctbl:cp-get-component) col-id)))
       keymap)))
@@ -733,7 +733,7 @@ bug), this function may return nil."
      ))
   "Keymap for the header columns.")
 
-(defvar ctbl:table-mode-map 
+(defvar ctbl:table-mode-map
   (ctbl:define-keymap
    '(
      ("k" . ctbl:navi-move-up)
@@ -788,8 +788,8 @@ bug), this function may return nil."
   "[internal] Return a list of rows. This function makes side effects:
 cell widths are stored at COLUMN-WIDTHS, longer cell strings are truncated by
 maximum width of the column models."
-  (loop for row in rows collect 
-        (loop for c in row 
+  (loop for row in rows collect
+        (loop for c in row
               for cm in cmodels
               for cwmax = (ctbl:cmodel-max-width cm)
               for i from 0
@@ -816,7 +816,7 @@ surplus width."
      ((or (null total-width)
           (= total-width init-total)) column-widths)
      ((< total-width init-total)
-      (ctbl:render-adjust-cell-width-shrink 
+      (ctbl:render-adjust-cell-width-shrink
        cmodels column-widths total-width init-total))
      (t
       (ctbl:render-adjust-cell-width-expand
@@ -875,7 +875,7 @@ surplus width."
   (loop for cw in column-widths
         for cm in cmodels
         for al = (ctbl:cmodel-align cm)
-        collect 
+        collect
         (lexical-let ((cw cw))
           (cond
            ((eq al 'left)
@@ -913,7 +913,7 @@ surplus width."
   (let ((bgcolor (ctbl:render-bg-color str row-id col-id model param)))
     (if bgcolor
         (let ((org-face (get-text-property 0 'face str)))
-          (propertize 
+          (propertize
            (copy-sequence str)
            'face (if org-face
                      (append org-face (list ':background  bgcolor))
@@ -923,7 +923,7 @@ surplus width."
 (defun ctbl:render-line-color (str model param index)
   "[internal] Return the propertize string."
   (propertize (copy-sequence str)
-              'face (list 
+              'face (list
                      ':foreground
                      (ctbl:render-choose-color model param index))))
 
@@ -956,7 +956,7 @@ surplus width."
   (let ((vparam (ctbl:param-draw-vlines param))
         (hline (ctbl:param-horizontal-line param))
         left joint right)
-    (if (not (ctbl:render-draw-hline-p 
+    (if (not (ctbl:render-draw-hline-p
               model (ctbl:param-draw-hlines param) index))
         ""
       (cond
@@ -972,7 +972,7 @@ surplus width."
         (setq left  (char-to-string (ctbl:param-left-junction param))
               joint (char-to-string (ctbl:param-cross-junction param))
               right (char-to-string (ctbl:param-right-junction param)))))
-      (ctbl:render-hline-color 
+      (ctbl:render-hline-color
        (concat
         (if (ctbl:render-draw-vline-p model vparam 0) left)
         (loop with ret = nil with endi = (length column-widths)
@@ -993,7 +993,7 @@ surplus width."
   "[internal] Join a list of column strings with vertical lines."
   (let (ret (V (char-to-string (ctbl:param-vertical-line param))))
     ;; left border line
-    (setq ret (if (ctbl:render-draw-vline-p 
+    (setq ret (if (ctbl:render-draw-vline-p
                    model (ctbl:param-draw-vlines param) 0)
                   (list (ctbl:render-vline-color V model param 0))
                 nil))
@@ -1006,7 +1006,7 @@ surplus width."
           for color = (ctbl:render-choose-color model param-vc i)
           do
           (push cv ret)
-          (when (and (ctbl:render-draw-vline-p 
+          (when (and (ctbl:render-draw-vline-p
                       model (ctbl:param-draw-vlines param) i)
                      (not endp))
             (push (ctbl:render-vline-color V model param i) ret)))
@@ -1028,7 +1028,7 @@ surplus width."
           with endi = (length cmodels)
           for i from 1 upto (length cmodels)
           for endp = (equal i endi) do
-          (when (and (ctbl:render-draw-vline-p 
+          (when (and (ctbl:render-draw-vline-p
                       model (ctbl:param-draw-vlines param) i)
                      (not endp))
             (incf sum)))
@@ -1042,10 +1042,10 @@ surplus width."
   "[internal] Rendering the table view."
     (let* ((EOL "\n")
            (cmodels (ctbl:model-column-model model))
-           (rows (ctbl:sort 
+           (rows (ctbl:sort
                   (copy-sequence (ctbl:model-data model)) cmodels
                   (ctbl:model-sort-state model)))
-           (column-widths 
+           (column-widths
             (loop for c in cmodels
                   for title = (ctbl:cmodel-title c)
                   collect (or (ctbl:cmodel-min-width c)
@@ -1054,11 +1054,11 @@ surplus width."
       ;; check cell widths
       (setq rows (ctbl:render-check-cell-width rows cmodels column-widths))
       ;; adjust cell widths for ctbl:dest width
-      (setq column-widths 
-            (ctbl:render-adjust-cell-width 
-             cmodels column-widths 
+      (setq column-widths
+            (ctbl:render-adjust-cell-width
+             cmodels column-widths
              (- (ctbl:dest-width dest)
-                (ctbl:render-sum-vline-widths 
+                (ctbl:render-sum-vline-widths
                  cmodels model param))))
       (erase-buffer)
       (setq column-format (ctbl:render-get-formats cmodels column-widths))
@@ -1069,10 +1069,10 @@ surplus width."
               (loop for cm in cmodels
                     for i from 0
                     for cw in column-widths
-                    collect 
+                    collect
                     (propertize
                      (ctbl:format-center cw (ctbl:cmodel-title cm))
-                     'ctbl:col-id i 
+                     'ctbl:col-id i
                      'local-map (ctbl:render-column-header-keymap i)
                      'mouse-face 'highlight))
               model param)))
@@ -1082,9 +1082,9 @@ surplus width."
           ;; buffer header-line
           (let ((fcol (/ (car (window-fringes))
                          (frame-char-width))))
-            (setq header-line-format 
+            (setq header-line-format
                   (concat (make-string fcol ? ) header-string))))
-         (t 
+         (t
           ;; content area
           (insert (ctbl:render-make-hline column-widths model param 0) ; border
                   header-string EOL))))
@@ -1092,7 +1092,7 @@ surplus width."
       (loop for cols in rows
             for row-index from 0
             do
-            (insert (ctbl:render-make-hline 
+            (insert (ctbl:render-make-hline
                      column-widths model param (1+ row-index)))
             (insert
              (ctbl:render-join-columns
@@ -1101,9 +1101,9 @@ surplus width."
                     for fmt in column-format
                     for col-index from 0
                     for str = (ctbl:render-bg-color-put
-                               (funcall fmt i) row-index col-index 
+                               (funcall fmt i) row-index col-index
                                model param)
-                    collect 
+                    collect
                     (ctbl:tp str 'ctbl:cell-id (cons row-index col-index)))
               model param) EOL))
       (insert (ctbl:render-make-hline
@@ -1159,21 +1159,21 @@ sides with the character PADDING."
 
 (defun ctbl:sort-string-lessp (i j)
   "[internal] String comparator."
-  (cond 
+  (cond
    ((string= i j) 0)
    ((string< i j) -1)
    (t 1)))
 
 (defun ctbl:sort-number-lessp (i j)
   "[internal] Number comparator."
-  (cond 
+  (cond
    ((= i j) 0)
    ((< i j) -1)
    (t 1)))
 
 (defun ctbl:sort (rows cmodels orders)
   "[internal] Sort rows according to order indexes and column models."
-  (let* 
+  (let*
       ((comparator
         (lambda (ref)
           (lexical-let
@@ -1220,7 +1220,7 @@ This function uses the function
 `ctbl:create-table-component-buffer' internally."
   (interactive)
   (let ((cp (ctbl:create-table-component-buffer
-             :buffer buffer :width width :height height 
+             :buffer buffer :width width :height height
              :custom-map custom-map :model model :param param)))
     (switch-to-buffer (ctbl:cp-get-buffer cp))))
 
@@ -1263,7 +1263,7 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
                       (put-text-property (point-min) (1- (point-max))
                                          'ctbl:component cp)
                       (ctbl:fill-keymap-property
-                       (point-min) (1- (point-max)) 
+                       (point-min) (1- (point-max))
                        (or keymap ctbl:table-mode-map))))))))
         (setf (ctbl:dest-after-update-func dest) after-update-func)
         (funcall after-update-func)
@@ -1275,7 +1275,7 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
 (defun* ctbl:get-table-text(&key width height model param)
   "Return a text that is drew the table view.
 
-In this case, the rendering destination object is disposable. So, 
+In this case, the rendering destination object is disposable. So,
 one can not modify the obtained text with `ctbl:xxx' functions.
 
 WIDTH and HEIGHT are reference size of the table view."
@@ -1314,16 +1314,16 @@ WIDTH and HEIGHT are reference size of the table view."
             :width 50
             :model
             (make-ctbl:model
-             :column-model 
-             (list (make-ctbl:cmodel 
+             :column-model
+             (list (make-ctbl:cmodel
                     :title "A" :sorter 'ctbl:sort-number-lessp
                     :min-width 5 :align 'right)
-                   (make-ctbl:cmodel 
+                   (make-ctbl:cmodel
                     :title "Title" :align 'center
                     :sorter (lambda (a b) (ctbl:sort-number-lessp (length a) (length b))))
-                   (make-ctbl:cmodel 
+                   (make-ctbl:cmodel
                     :title "Comment" :align 'left))
-             :data 
+             :data
              '((1  "Bon Tanaka" "8 Year Curry.")
                (2  "Bon Tanaka" "Nan-ban Curry.")
                (3  "Bon Tanaka" "Half Curry.")
