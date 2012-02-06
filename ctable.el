@@ -123,6 +123,12 @@
      :background "Blue2"))
   "Face for cell selection" :group 'ctable)
 
+(defface ctbl:face-continue-bar
+  '((((class color) (background light))
+     :background "OldLace")
+    (((class color) (background dark))
+     :background "Gray26"))
+  "Face for continue bar" :group 'ctable)
 
 ;;; Utilities
 
@@ -830,8 +836,8 @@ surplus width."
     (loop for cnum = (length column-indexes)
           until (or (= 0 cnum) (= 0 residual))
           do
-          (setq ave-shrink (max 1 (/ residual cnum)))
-          (loop for idx in column-indexes
+          (loop with ave-shrink = (max 1 (/ residual cnum))
+                for idx in column-indexes
                 for cmodel = (nth idx cmodels)
                 for cwidth = (nth idx column-widths)
                 for min-width = (or (ctbl:cmodel-min-width cmodel) 1)
@@ -854,8 +860,8 @@ surplus width."
     (loop for cnum = (length column-indexes)
           until (or (= 0 cnum) (= 0 residual))
           do
-          (setq ave-expand (max 1 (/ residual cnum)))
-          (loop for idx in column-indexes
+          (loop with ave-expand = (max 1 (/ residual cnum))
+                for idx in column-indexes
                 for cmodel = (nth idx cmodels)
                 for cwidth = (nth idx column-widths)
                 for max-width = (or (ctbl:cmodel-max-width cmodel) total-width)
@@ -1038,76 +1044,134 @@ surplus width."
       (incf sum))
     sum))
 
+(defun ctbl:state-new (max-height)
+  "[internal] Create output state object. see `ctbl:render-insert' function."
+  (cons 0 max-height))
+
+(defun ctbl:state-current (state)
+  "[internal] Return the current line number."
+  (car state))
+
+(defun ctbl:state-max (state)
+  "[internal] Return the maximum line number or nil."
+  (cdr state))
+
+(defun ctbl:state-increment (state)
+  "[internal] Increment the current line number."
+  (incf (car state)))
+
+(defun ctbl:state-over-p (state)
+  "[internal] Return t if the current line number is over the
+maximum line number."
+  (and (ctbl:state-max state) 
+       (<= (ctbl:state-max state) (ctbl:state-current state))))
+
+(defun ctbl:render-insert (state &rest args)
+  "[internal] Insert ARGS into the current buffer.
+If the current line number is over the limit, this function
+throws `ctbl:insert-break' symbol to break loop."
+  (let ((str (apply 'concat args)))
+    (unless (or (null args) (equal "" str))
+      (insert str)
+      (ctbl:state-increment state)
+      (when (ctbl:state-over-p state)
+        (let ((nextbar (ctbl:format-center
+                        (1- (length str)) ; chop EOL
+                        "[Continue...]")))
+          (insert (propertize nextbar
+                              'face 'ctbl:face-continue-bar
+                              'mouse-face 'highlight) "\n"))
+        (throw 'ctbl:insert-break nil)))))
+
 (defun ctbl:render-main (dest model param)
   "[internal] Rendering the table view."
-    (let* ((EOL "\n")
-           (cmodels (ctbl:model-column-model model))
-           (rows (ctbl:sort
-                  (copy-sequence (ctbl:model-data model)) cmodels
-                  (ctbl:model-sort-state model)))
-           (column-widths
-            (loop for c in cmodels
-                  for title = (ctbl:cmodel-title c)
-                  collect (or (ctbl:cmodel-min-width c)
-                              (and title (length title)) 0)))
-           column-format)
-      ;; check cell widths
-      (setq rows (ctbl:render-check-cell-width rows cmodels column-widths))
-      ;; adjust cell widths for ctbl:dest width
-      (setq column-widths
-            (ctbl:render-adjust-cell-width
-             cmodels column-widths
-             (- (ctbl:dest-width dest)
-                (ctbl:render-sum-vline-widths
-                 cmodels model param))))
-      (erase-buffer)
-      (setq column-format (ctbl:render-get-formats cmodels column-widths))
+  (let* ((EOL "\n")
+         (cmodels (ctbl:model-column-model model))
+         (rows (ctbl:sort
+                (copy-sequence (ctbl:model-data model)) cmodels
+                (ctbl:model-sort-state model)))
+         (dstate (ctbl:state-new (ctbl:dest-height dest)))
+         (column-widths
+          (loop for c in cmodels
+                for title = (ctbl:cmodel-title c)
+                collect (or (ctbl:cmodel-min-width c)
+                            (and title (length title)) 0)))
+         column-format)
+    ;; check cell widths
+    (setq rows (ctbl:render-check-cell-width rows cmodels column-widths))
+    ;; adjust cell widths for ctbl:dest width
+    (setq column-widths
+          (ctbl:render-adjust-cell-width
+           cmodels column-widths
+           (- (ctbl:dest-width dest)
+              (ctbl:render-sum-vline-widths
+               cmodels model param))))
+    (erase-buffer)
+    (setq column-format (ctbl:render-get-formats cmodels column-widths))
+    (catch 'ctbl:insert-break
+      (ctbl:render-main-header dest model param 
+                               cmodels dstate column-widths)
+      (ctbl:render-main-content dest model param 
+                                cmodels rows dstate column-widths column-format)
+      )))
 
-      ;; header
-      (let ((header-string
-             (ctbl:render-join-columns
-              (loop for cm in cmodels
-                    for i from 0
-                    for cw in column-widths
-                    collect
-                    (propertize
-                     (ctbl:format-center cw (ctbl:cmodel-title cm))
-                     'ctbl:col-id i
-                     'local-map (ctbl:render-column-header-keymap i)
-                     'mouse-face 'highlight))
-              model param)))
-        (cond
-         ((and (eq 'buffer (ctbl:dest-type dest))
-               (ctbl:param-fixed-header param))
-          ;; buffer header-line
-          (let ((fcol (/ (car (window-fringes))
-                         (frame-char-width))))
-            (setq header-line-format
-                  (concat (make-string fcol ? ) header-string))))
-         (t
-          ;; content area
-          (insert (ctbl:render-make-hline column-widths model param 0) ; border
-                  header-string EOL))))
-      ;; contents
-      (loop for cols in rows
-            for row-index from 0
-            do
-            (insert (ctbl:render-make-hline
-                     column-widths model param (1+ row-index)))
-            (insert
-             (ctbl:render-join-columns
-              (loop for i in cols
-                    for s = (if (stringp i) i (format "%s" i))
-                    for fmt in column-format
-                    for col-index from 0
-                    for str = (ctbl:render-bg-color-put
-                               (funcall fmt i) row-index col-index
-                               model param)
-                    collect
-                    (ctbl:tp str 'ctbl:cell-id (cons row-index col-index)))
-              model param) EOL))
-      (insert (ctbl:render-make-hline
-               column-widths model param -1))))
+(defun ctbl:render-main-header (dest model param cmodels dstate column-widths)
+  "[internal] Render the table header."
+  (let ((EOL "\n") 
+        (header-string
+         (ctbl:render-join-columns
+          (loop for cm in cmodels
+                for i from 0
+                for cw in column-widths
+                collect
+                (propertize
+                 (ctbl:format-center cw (ctbl:cmodel-title cm))
+                 'ctbl:col-id i
+                 'local-map (ctbl:render-column-header-keymap i)
+                 'mouse-face 'highlight))
+          model param)))
+    (cond
+     ((and (eq 'buffer (ctbl:dest-type dest))
+           (ctbl:param-fixed-header param))
+      ;; buffer header-line
+      (let ((fcol (/ (car (window-fringes))
+                     (frame-char-width))))
+        (setq header-line-format
+              (concat (make-string fcol ? ) header-string))))
+     (t
+      ;; content area
+      (ctbl:render-insert ; border line
+       dstate (ctbl:render-make-hline column-widths model param 0))
+      (ctbl:render-insert dstate header-string EOL)  ; header columns
+      ))))
+
+(defun ctbl:render-main-content (dest model param cmodels rows 
+                                      dstate column-widths column-format)
+  "[internal] Render the table content."
+  (let ((EOL "\n"))
+    (loop for cols in rows
+          for row-index from 0
+          do
+          (ctbl:render-insert 
+           dstate
+           (ctbl:render-make-hline
+            column-widths model param (1+ row-index)))
+          (ctbl:render-insert
+           dstate
+           (ctbl:render-join-columns
+            (loop for i in cols
+                  for s = (if (stringp i) i (format "%s" i))
+                  for fmt in column-format
+                  for col-index from 0
+                  for str = (ctbl:render-bg-color-put
+                             (funcall fmt i) row-index col-index
+                             model param)
+                  collect
+                  (ctbl:tp str 'ctbl:cell-id (cons row-index col-index)))
+            model param) EOL))
+    ;; bottom border line
+    (ctbl:render-insert
+     dstate (ctbl:render-make-hline column-widths model param -1))))
 
 
 ;; Rendering utilities
@@ -1311,7 +1375,7 @@ WIDTH and HEIGHT are reference size of the table view."
                   (t nil))))
     (let ((cp
            (ctbl:create-table-component-buffer
-            :width 50
+            :width 50 :height 10
             :model
             (make-ctbl:model
              :column-model
