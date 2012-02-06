@@ -1044,9 +1044,10 @@ surplus width."
       (incf sum))
     sum))
 
-(defun ctbl:state-new (max-height)
+(defun ctbl:state-new (max-height data)
   "[internal] Create output state object. see `ctbl:render-insert' function."
-  (cons 0 max-height))
+  ;; (current-line max-height data)
+  (list 0 max-height data))
 
 (defun ctbl:state-current (state)
   "[internal] Return the current line number."
@@ -1054,17 +1055,33 @@ surplus width."
 
 (defun ctbl:state-max (state)
   "[internal] Return the maximum line number or nil."
-  (cdr state))
+  (cadr state))
 
 (defun ctbl:state-increment (state)
   "[internal] Increment the current line number."
   (incf (car state)))
+
+(defun ctbl:state-set-current-data (state data)
+  "[internal] Set DATA at the data slot of STATE."
+  (setf (nth 2 state) data))
+
+(defun ctbl:state-get-current-data (state)
+  "[internal] Return an object in the data slot of STATE."
+  (nth 2 state))
 
 (defun ctbl:state-over-p (state)
   "[internal] Return t if the current line number is over the
 maximum line number."
   (and (ctbl:state-max state) 
        (<= (ctbl:state-max state) (ctbl:state-current state))))
+
+(defvar ctbl:continue-button-keymap
+  (ctbl:define-keymap
+   '(([mouse-1] . ctbl:action-continue-clicked)
+     ("C-m" . ctbl:action-continue-clicked)
+     ("RET" . ctbl:action-continue-clicked)
+     ))
+  "Keymap for the continue button.")
 
 (defun ctbl:render-insert (state &rest args)
   "[internal] Insert ARGS into the current buffer.
@@ -1075,13 +1092,25 @@ throws `ctbl:insert-break' symbol to break loop."
       (insert str)
       (ctbl:state-increment state)
       (when (ctbl:state-over-p state)
-        (let ((nextbar (ctbl:format-center
-                        (1- (length str)) ; chop EOL
-                        "[Continue...]")))
+        (let* ((msg (format "[Continue... (%s)]" ; data => remain row number
+                            (ctbl:state-get-current-data state)))
+               (nextbar (ctbl:format-center ; -1 => chop EOL
+                        (1- (length str)) msg)))
           (insert (propertize nextbar
+                              'keymap ctbl:continue-button-keymap
                               'face 'ctbl:face-continue-bar
                               'mouse-face 'highlight) "\n"))
         (throw 'ctbl:insert-break nil)))))
+(put 'ctbl:render-insert 'lisp-indent-function 1)
+
+(defun ctbl:action-continue-clicked ()
+  "Action for clicking the continue button."
+  (interactive)
+  (let ((cp (ctbl:cp-get-component)))
+    (when cp
+      (let ((dest (ctbl:component-dest cp)))
+        (setf (ctbl:dest-height dest) nil)
+        (ctbl:cp-update cp)))))
 
 (defun ctbl:render-main (dest model param)
   "[internal] Rendering the table view."
@@ -1090,7 +1119,7 @@ throws `ctbl:insert-break' symbol to break loop."
          (rows (ctbl:sort
                 (copy-sequence (ctbl:model-data model)) cmodels
                 (ctbl:model-sort-state model)))
-         (dstate (ctbl:state-new (ctbl:dest-height dest)))
+         (dstate (ctbl:state-new (ctbl:dest-height dest) rows))
          (column-widths
           (loop for c in cmodels
                 for title = (ctbl:cmodel-title c)
@@ -1140,38 +1169,37 @@ throws `ctbl:insert-break' symbol to break loop."
               (concat (make-string fcol ? ) header-string))))
      (t
       ;; content area
-      (ctbl:render-insert ; border line
-       dstate (ctbl:render-make-hline column-widths model param 0))
+      (ctbl:render-insert dstate ; border line
+        (ctbl:render-make-hline column-widths model param 0))
       (ctbl:render-insert dstate header-string EOL)  ; header columns
       ))))
 
 (defun ctbl:render-main-content (dest model param cmodels rows 
                                       dstate column-widths column-format)
   "[internal] Render the table content."
-  (let ((EOL "\n"))
+  (let ((EOL "\n") (row-num (length rows)))
     (loop for cols in rows
           for row-index from 0
           do
-          (ctbl:render-insert 
-           dstate
-           (ctbl:render-make-hline
-            column-widths model param (1+ row-index)))
-          (ctbl:render-insert
-           dstate
-           (ctbl:render-join-columns
-            (loop for i in cols
-                  for s = (if (stringp i) i (format "%s" i))
-                  for fmt in column-format
-                  for col-index from 0
-                  for str = (ctbl:render-bg-color-put
-                             (funcall fmt i) row-index col-index
-                             model param)
-                  collect
-                  (ctbl:tp str 'ctbl:cell-id (cons row-index col-index)))
-            model param) EOL))
+          (ctbl:render-insert dstate
+            (ctbl:render-make-hline
+             column-widths model param (1+ row-index)))
+          (ctbl:render-insert dstate
+            (ctbl:render-join-columns
+             (loop for i in cols
+                   for s = (if (stringp i) i (format "%s" i))
+                   for fmt in column-format
+                   for col-index from 0
+                   for str = (ctbl:render-bg-color-put
+                              (funcall fmt i) row-index col-index
+                              model param)
+                   collect
+                   (ctbl:tp str 'ctbl:cell-id (cons row-index col-index)))
+             model param) EOL)
+          (ctbl:state-set-current-data dstate (- row-num row-index)))
     ;; bottom border line
-    (ctbl:render-insert
-     dstate (ctbl:render-make-hline column-widths model param -1))))
+    (ctbl:render-insert dstate
+      (ctbl:render-make-hline column-widths model param -1))))
 
 
 ;; Rendering utilities
