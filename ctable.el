@@ -513,21 +513,21 @@ HOOK is a function that has no argument."
   (loop for f in (ctbl:component-click-hooks component)
         do (condition-case err
                (funcall f)
-             (nil (message "CTable: Click / Hook error %S [%s]" f err)))))
+             (error (message "CTable: Click / Hook error %S [%s]" f err)))))
 
 (defun ctbl:cp-fire-selection-change-hooks (component)
   "[internal] Call selection change hook functions of the component with no arguments."
   (loop for f in (ctbl:component-selection-change-hooks component)
         do (condition-case err
                (funcall f)
-             (nil (message "CTable: Selection change / Hook error %S [%s]" f err)))))
+             (error (message "CTable: Selection change / Hook error %S [%s]" f err)))))
 
 (defun ctbl:cp-fire-update-hooks (component)
   "[internal] Call update hook functions of the component with no arguments."
   (loop for f in (ctbl:component-update-hooks component)
         do (condition-case err
                (funcall f)
-             (nil (message "Ctable: Update / Hook error %S [%s]" f err)))))
+             (error (message "Ctable: Update / Hook error %S [%s]" f err)))))
 
 
 (defun ctbl:find-by-cell-id (dest cell-id)
@@ -712,8 +712,8 @@ bug), this function may return nil."
           for f in (ctbl:cmodel-click-hooks cmodel)
           do (condition-case err
                  (funcall f cp col-id)
-               (nil (message "Ctable: Header Click / Hook error %S [%s]"
-                             f err))))))
+               (error (message "Ctable: Header Click / Hook error %S [%s]"
+                               f err))))))
 
 (defun ctbl:render-column-header-keymap (col-id)
   "[internal] Generate action handler on the header columns. (for header-line-format)"
