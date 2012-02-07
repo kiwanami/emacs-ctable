@@ -243,8 +243,8 @@ If the text already has some keymap property, the text is skipped."
 ;; buffer      : a buffer object of rendering destination.
 ;; min-func    : a function that returns upper limit of rendering destination.
 ;; max-func    : a function that returns lower limit of rendering destination.
-;; width       : width of the reference size.
-;; height      : height of the reference size.
+;; width       : width of the reference size. (number, nil or full)
+;; height      : height of the reference size. (number, nil or full)
 ;; clear-func  : a function that clears the rendering destination.
 ;; before-update-func : a function that is called at the beginning of rendering routine.
 ;; after-update-func  : a function that is called at the end of rendering routine.
@@ -308,8 +308,8 @@ added to default keymap `ctbl:table-mode-map'."
            :min-func 'point-min
            :max-func 'point-max
            :buffer buffer
-           :width  (or width (window-width window))
-           :height (or height (window-height window))
+           :width  width
+           :height height
            :clear-func (lambda ()
                          (with-current-buffer buffer
                            (erase-buffer)))))
@@ -336,8 +336,8 @@ the calfw is responsible to manage the buffer and key maps."
      :min-func (lambda () (marker-position mark-begin))
      :max-func (lambda () (marker-position mark-end))
      :buffer buf
-     :width (or width (window-width window))
-     :height (or height (window-height window))
+     :width  width
+     :height height
      :clear-func
      (lambda ()
          (ctbl:dest-region-clear (marker-position mark-begin)
@@ -366,8 +366,8 @@ the calfw is responsible to manage the buffer and key maps."
            :min-func 'point-min
            :max-func 'point-max
            :buffer buffer
-           :width (or width (window-width window))
-           :height (or height (window-height window))
+           :width  width
+           :height height
            :clear-func (lambda ()
                          (with-current-buffer buffer
                            (erase-buffer)))))
@@ -1112,14 +1112,35 @@ throws `ctbl:insert-break' symbol to break loop."
         (setf (ctbl:dest-height dest) nil)
         (ctbl:cp-update cp)))))
 
+(defun ctbl:dest-width-get (dest)
+  "[internal] Return the column number to draw the table view.
+Return nil, if the width is not given. Then, the renderer draws freely."
+  (let ((dwidth (ctbl:dest-width dest)) ; dwidth must not be nil
+        (dwin (get-buffer-window)))
+    (cond
+     ((numberp dwidth) dwidth)
+     ((eq 'full dwidth) (window-width dwin))
+     (t nil))))
+
+(defun ctbl:dest-height-get (dest)
+  "[internal] Return the row number to draw the table view.
+Return nil, if the height is not given. Then, the renderer draws freely."
+  (let ((dheight (ctbl:dest-height dest)) ; dheight must not be nil
+        (dwin (get-buffer-window)))
+    (cond
+     ((numberp dheight) dheight)
+     ((eq 'full dheight) (1- (window-height dwin)))
+     (t nil))))
+
 (defun ctbl:render-main (dest model param)
-  "[internal] Rendering the table view."
+  "[internal] Rendering the table view.
+This function assumes that the current buffer is the destination buffer."
   (let* ((EOL "\n")
          (cmodels (ctbl:model-column-model model))
          (rows (ctbl:sort
                 (copy-sequence (ctbl:model-data model)) cmodels
                 (ctbl:model-sort-state model)))
-         (dstate (ctbl:state-new (ctbl:dest-height dest) rows))
+         (dstate (ctbl:state-new (ctbl:dest-height-get dest) rows))
          (column-widths
           (loop for c in cmodels
                 for title = (ctbl:cmodel-title c)
@@ -1129,12 +1150,13 @@ throws `ctbl:insert-break' symbol to break loop."
     ;; check cell widths
     (setq rows (ctbl:render-check-cell-width rows cmodels column-widths))
     ;; adjust cell widths for ctbl:dest width
-    (setq column-widths
-          (ctbl:render-adjust-cell-width
-           cmodels column-widths
-           (- (ctbl:dest-width dest)
-              (ctbl:render-sum-vline-widths
-               cmodels model param))))
+    (when (ctbl:dest-width-get dest)
+      (setq column-widths
+            (ctbl:render-adjust-cell-width
+             cmodels column-widths
+             (- (ctbl:dest-width-get dest)
+                (ctbl:render-sum-vline-widths
+                 cmodels model param)))))
     (erase-buffer)
     (setq column-format (ctbl:render-get-formats cmodels column-widths))
     (catch 'ctbl:insert-break
@@ -1403,7 +1425,7 @@ WIDTH and HEIGHT are reference size of the table view."
                   (t nil))))
     (let ((cp
            (ctbl:create-table-component-buffer
-            :width 50 :height 10
+            :width nil :height nil
             :model
             (make-ctbl:model
              :column-model
