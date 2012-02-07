@@ -225,11 +225,13 @@ If the text already has some keymap property, the text is skipped."
 ;; model        : an object of the table model
 ;; selected     : selected cell-id: (row index . col index)
 ;; param        : rendering parameter object
+;; sorted-data  : sorted data to display the table view. 
+;;    see `ctbl:cp-get-selected-data-row' and `ctbl:cp-get-selected-data-cell'.
 ;; update-hooks : a list of hook functions for update event
 ;; selection-change-hooks : a list of hook functions for selection change event
 ;; click-hooks            : a list of hook functions for click event
 
-(defstruct ctbl:component dest model selected param
+(defstruct ctbl:component dest model param selected sorted-data
   update-hooks selection-change-hooks click-hooks)
 
 
@@ -434,6 +436,22 @@ found at the variable, return nil."
   "Return the selected cell-id of the component."
   (ctbl:component-selected component))
 
+(defun ctbl:cp-get-selected-data-row (component)
+  "Return the selected row data. If no cell is selected, return nil."
+  (let ((rows (ctbl:component-sorted-data component))
+        (cell-id (ctbl:component-selected component))
+        (row-id (car cell-id)) (col-id (cdr cell-id)))
+    (if row-id (nth row-id rows) nil)))
+
+(defun ctbl:cp-get-selected-data-cell (component)
+  "Return the selected cell data. If no cell is selected, return nil."
+  (let ((rows (ctbl:component-sorted-data component))
+        (cell-id (ctbl:component-selected component))
+        (row-id (car cell-id)) (col-id (cdr cell-id)))
+    (if row-id 
+        (nth col-id (nth row-id rows))
+      nil)))
+
 (defun ctbl:cp-get-model (component)
   "Return the model object."
   (ctbl:component-model component))
@@ -505,10 +523,11 @@ HOOK is a function that has no argument."
       (let ((buffer-read-only nil))
         (ctbl:dest-with-region dest
           (ctbl:dest-clear dest)
-          (ctbl:render-main
-           dest
-           (ctbl:component-model component)
-           (ctbl:component-param component))))
+          (setf (ctbl:component-sorted-data component)
+                (ctbl:render-main
+                 dest
+                 (ctbl:component-model component)
+                 (ctbl:component-param component)))))
       (ctbl:cp-set-selected-cell
        component (ctbl:component-selected component))
       (ctbl:dest-after-update dest)
@@ -1164,7 +1183,8 @@ This function assumes that the current buffer is the destination buffer."
                                cmodels dstate column-widths)
       (ctbl:render-main-content dest model param 
                                 cmodels rows dstate column-widths column-format)
-      )))
+      )
+    rows))
 
 (defun ctbl:render-main-header (dest model param cmodels dstate column-widths)
   "[internal] Render the table header."
@@ -1453,7 +1473,9 @@ WIDTH and HEIGHT are reference size of the table view."
              '(2 1)
              )
             :param param)))
-      (ctbl:cp-add-click-hook cp (lambda () (message "CTable : Click Hook")))
+      (ctbl:cp-add-click-hook 
+       cp (lambda () (message "CTable : Click Hook [%S]" 
+                              (ctbl:cp-get-selected-data-cell cp))))
       (ctbl:cp-add-selection-change-hook cp (lambda () (message "CTable : Select Hook")))
       (ctbl:cp-add-update-hook cp (lambda () (message "CTable : Update Hook")))
       (switch-to-buffer (ctbl:cp-get-buffer cp)))))
