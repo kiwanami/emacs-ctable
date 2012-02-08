@@ -1154,7 +1154,7 @@ Return nil, if the height is not given. Then, the renderer draws freely."
 (defun ctbl:render-main (dest model param)
   "[internal] Rendering the table view.
 This function assumes that the current buffer is the destination buffer."
-  (let* ((EOL "\n")
+  (let* ((EOL "\n") drows
          (cmodels (ctbl:model-column-model model))
          (rows (ctbl:sort
                 (copy-sequence (ctbl:model-data model)) cmodels
@@ -1167,7 +1167,7 @@ This function assumes that the current buffer is the destination buffer."
                             (and title (length title)) 0)))
          column-format)
     ;; check cell widths
-    (setq rows (ctbl:render-check-cell-width rows cmodels column-widths))
+    (setq drows (ctbl:render-check-cell-width rows cmodels column-widths))
     ;; adjust cell widths for ctbl:dest width
     (when (ctbl:dest-width-get dest)
       (setq column-widths
@@ -1182,8 +1182,8 @@ This function assumes that the current buffer is the destination buffer."
       (ctbl:render-main-header dest model param 
                                cmodels dstate column-widths)
       (ctbl:render-main-content dest model param 
-                                cmodels rows dstate column-widths column-format)
-      )
+                                cmodels drows dstate column-widths column-format))
+    ;; return the sorted list
     rows))
 
 (defun ctbl:render-main-header (dest model param cmodels dstate column-widths)
@@ -1458,24 +1458,24 @@ WIDTH and HEIGHT are reference size of the table view."
                    (make-ctbl:cmodel
                     :title "Comment" :align 'left))
              :data
-             '((1  "Bon Tanaka" "8 Year Curry.")
-               (2  "Bon Tanaka" "Nan-ban Curry.")
-               (3  "Bon Tanaka" "Half Curry.")
-               (4  "Bon Tanaka" "Katsu Curry.")
-               (5  "Bon Tanaka" "Gyu-don.")
-               (6  "CoCo Ichi"  "Beaf Curry.")
-               (7  "CoCo Ichi"  "Poke Curry.")
-               (8  "CoCo Ichi"  "Yasai Curry.")
-               (9  "Berkley"    "Hamburger Curry.")
-               (10 "Berkley"    "Lunch set.")
-               (11 "Berkley"    "Coffee."))
+             '((1  "Bon Tanaka" "8 Year Curry." 'a)
+               (2  "Bon Tanaka" "Nan-ban Curry." 'b)
+               (3  "Bon Tanaka" "Half Curry." 'c)
+               (4  "Bon Tanaka" "Katsu Curry." 'd)
+               (5  "Bon Tanaka" "Gyu-don." 'e)
+               (6  "CoCo Ichi"  "Beaf Curry." 'f)
+               (7  "CoCo Ichi"  "Poke Curry." 'g)
+               (8  "CoCo Ichi"  "Yasai Curry." 'h)
+               (9  "Berkley"    "Hamburger Curry." 'i)
+               (10 "Berkley"    "Lunch set." 'j)
+               (11 "Berkley"    "Coffee." k))
              :sort-state
              '(2 1)
              )
             :param param)))
       (ctbl:cp-add-click-hook 
        cp (lambda () (message "CTable : Click Hook [%S]" 
-                              (ctbl:cp-get-selected-data-cell cp))))
+                              (ctbl:cp-get-selected-data-row cp))))
       (ctbl:cp-add-selection-change-hook cp (lambda () (message "CTable : Select Hook")))
       (ctbl:cp-add-update-hook cp (lambda () (message "CTable : Update Hook")))
       (switch-to-buffer (ctbl:cp-get-buffer cp)))))
