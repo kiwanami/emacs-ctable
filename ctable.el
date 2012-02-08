@@ -438,16 +438,16 @@ found at the variable, return nil."
 
 (defun ctbl:cp-get-selected-data-row (component)
   "Return the selected row data. If no cell is selected, return nil."
-  (let ((rows (ctbl:component-sorted-data component))
-        (cell-id (ctbl:component-selected component))
-        (row-id (car cell-id)) (col-id (cdr cell-id)))
+  (let* ((rows (ctbl:component-sorted-data component))
+         (cell-id (ctbl:component-selected component))
+         (row-id (car cell-id)) (col-id (cdr cell-id)))
     (if row-id (nth row-id rows) nil)))
 
 (defun ctbl:cp-get-selected-data-cell (component)
   "Return the selected cell data. If no cell is selected, return nil."
-  (let ((rows (ctbl:component-sorted-data component))
-        (cell-id (ctbl:component-selected component))
-        (row-id (car cell-id)) (col-id (cdr cell-id)))
+  (let* ((rows (ctbl:component-sorted-data component))
+         (cell-id (ctbl:component-selected component))
+         (row-id (car cell-id)) (col-id (cdr cell-id)))
     (if row-id 
         (nth col-id (nth row-id rows))
       nil)))
