@@ -258,6 +258,7 @@ If the text already has some keymap property, the text is skipped."
 
 (eval-when-compile
   (defmacro ctbl:dest-with-region (dest &rest body)
+    (declare (debug (form &rest form)))
     (let (($dest (gensym)))
       `(let ((,$dest ,dest))
          (with-current-buffer (ctbl:dest-buffer ,$dest)
@@ -520,7 +521,7 @@ HOOK is a function that has no argument."
     (with-current-buffer buf
       (ctbl:dest-before-update dest)
       (ctbl:dest-ol-selection-clear dest)
-      (let ((buffer-read-only nil))
+      (let (buffer-read-only)
         (ctbl:dest-with-region dest
           (ctbl:dest-clear dest)
           (setf (ctbl:component-sorted-data component)
@@ -1176,7 +1177,6 @@ This function assumes that the current buffer is the destination buffer."
              (- (ctbl:dest-width-get dest)
                 (ctbl:render-sum-vline-widths
                  cmodels model param)))))
-    (erase-buffer)
     (setq column-format (ctbl:render-get-formats cmodels column-widths))
     (catch 'ctbl:insert-break
       (ctbl:render-main-header dest model param 
