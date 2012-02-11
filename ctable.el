@@ -1164,8 +1164,8 @@ This function assumes that the current buffer is the destination buffer."
          (column-widths
           (loop for c in cmodels
                 for title = (ctbl:cmodel-title c)
-                collect (or (ctbl:cmodel-min-width c)
-                            (and title (length title)) 0)))
+                collect (max (or (ctbl:cmodel-min-width c) 0)
+                             (or (and title (length title)) 0))))
          column-format)
     ;; check cell widths
     (setq drows (ctbl:render-check-cell-width rows cmodels column-widths))
@@ -1252,6 +1252,9 @@ This function assumes that the current buffer is the destination buffer."
   (if (< limit-width (string-width org))
       (let ((str (truncate-string-to-width
                   (substring org 0) limit-width 0 nil ellipsis)))
+        (when (< limit-width (string-width str))
+          (setq str (truncate-string-to-width (substring org 0) 
+                                              limit-width)))
         (propertize str 'mouse-face 'highlight)
         (unless (get-text-property 0 'help-echo str)
           (propertize str 'help-echo org))
@@ -1265,7 +1268,7 @@ This function assumes that the current buffer is the destination buffer."
                        (ctbl:format-truncate string width t))
                   ""))
          (len (string-width cnt))
-         (margin (- width len)))
+         (margin (max 0 (- width len))))
     (concat (make-string margin padding) cnt)))
 
 (defun ctbl:format-center (width string &optional padding)
@@ -1276,10 +1279,10 @@ sides with the character PADDING."
                        (ctbl:format-truncate string width t))
                   ""))
          (len (string-width cnt))
-         (margin (/ (- width len) 2)))
+         (margin (max 0 (/ (- width len) 2))))
     (concat
      (make-string margin padding) cnt
-     (make-string (- width len margin) padding))))
+     (make-string (max 0 (- width len margin)) padding))))
 
 (defun ctbl:format-left (width string &optional padding)
   "[internal] Format STRING, padding on the right with the character PADDING."
@@ -1288,7 +1291,7 @@ sides with the character PADDING."
                        (ctbl:format-truncate string width t))
                   ""))
          (len (string-width cnt))
-         (margin (- width len)))
+         (margin (max 0 (- width len))))
     (concat cnt (make-string margin padding))))
 
 (defun ctbl:sort-string-lessp (i j)
