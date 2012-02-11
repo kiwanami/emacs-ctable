@@ -1355,7 +1355,6 @@ sides with the character PADDING."
   "Open a table buffer simply.
 This function uses the function
 `ctbl:create-table-component-buffer' internally."
-  (interactive)
   (let ((cp (ctbl:create-table-component-buffer
              :buffer buffer :width width :height height
              :custom-map custom-map :model model :param param)))
@@ -1375,6 +1374,32 @@ CUSTOM-MAP is the additional keymap that is added to default keymap `ctbl:table-
     (with-current-buffer (ctbl:dest-buffer dest)
       (set (make-local-variable 'ctbl:component) cp))
     cp))
+
+(defun ctbl:popup-table-buffer-easy (rows &optional header-row)
+  "Popup a table buffer from a list of rows."
+  (pop-to-buffer (ctbl:create-table-buffer-easy rows header-row)))
+
+(defun ctbl:open-table-buffer-easy (rows &optional header-row)
+  "Open a table buffer from a list of rows."
+  (switch-to-buffer (ctbl:create-table-buffer-easy rows header-row)))
+
+(defun ctbl:create-table-buffer-easy (rows &optional header-row)
+  "Return a table buffer from a list of rows."
+  (let* ((col-num (or (and header-row (length header-row))
+                      (and (car rows) (length (car rows)))))
+         (column-models
+          (if header-row
+              (loop for i in header-row
+                    collect (make-ctbl:cmodel :title (format "%s" i) :min-width 5))
+            (loop for i from 0 below col-num
+                  for ch = (char-to-string (+ ?A i))
+                  collect (make-ctbl:cmodel :title ch :min-width 5))))
+         (model 
+          (make-ctbl:model
+           :column-model column-models :data rows))
+         (cp (ctbl:create-table-component-buffer
+              :model model)))
+    (ctbl:cp-get-buffer cp)))
 
 ;; region
 
