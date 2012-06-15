@@ -1205,10 +1205,12 @@ This function assumes that the current buffer is the destination buffer."
      ((and (eq 'buffer (ctbl:dest-type dest))
            (ctbl:param-fixed-header param))
       ;; buffer header-line
-      (let ((fcol (/ (car (window-fringes))
-                     (frame-char-width))))
-        (setq header-line-format
-              (concat (make-string fcol ? ) header-string))))
+      (let* ((fcol (/ (car (window-fringes))
+                     (frame-char-width)))
+             (header-text (concat (make-string fcol ? ) header-string)))
+        (setq header-line-format header-text)
+        ;; save header-text for hscroll updating
+        (set (make-local-variable 'ctbl:header-text) header-text)))
      (t
       ;; content area
       (ctbl:render-insert dstate ; border line
@@ -1371,9 +1373,25 @@ BUFFER is the buffer to be rendered. If BUFFER is nil, this function creates a n
 CUSTOM-MAP is the additional keymap that is added to default keymap `ctbl:table-mode-map'."
   (let* ((dest  (ctbl:dest-init-buffer buffer width height custom-map))
          (cp (ctbl:cp-new dest model param)))
+    (setf (ctbl:dest-after-update-func dest)
+          (lambda ()
+            (ctbl:dest-buffer-update-header)))
     (with-current-buffer (ctbl:dest-buffer dest)
       (set (make-local-variable 'ctbl:component) cp))
     cp))
+
+(defun ctbl:dest-buffer-update-header ()
+  "[internal] After auto hscrolling, update the horizontal position of the header line."
+  (run-at-time 0.01 nil 'ctbl:dest-buffer-update-header--deferred))
+
+(defun ctbl:dest-buffer-update-header--deferred ()
+  "[internal] Adjust header line position."
+  (when (boundp 'ctbl:header-text)
+    (let* ((left (window-hscroll))
+           (text (substring ctbl:header-text left)))
+      (setq header-line-format text))
+    (force-window-update (current-buffer))))
+
 
 (defun ctbl:popup-table-buffer-easy (rows &optional header-row)
   "Popup a table buffer from a list of rows."
