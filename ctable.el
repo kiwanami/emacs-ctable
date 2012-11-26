@@ -1,8 +1,9 @@
 ;;; ctable.el --- Table component for Emacs Lisp
 
-;; Copyright (C) 2011 SAKURAI Masashi
+;; Copyright (C) 2011,2012 SAKURAI Masashi
 
-;; Author:  <m.sakurai at kiwanami.net>
+;; Author: SAKURAI Masashi <m.sakurai at kiwanami.net>
+;; Version: 0.1.1
 ;; Keywords: table
 
 ;; This program is free software; you can redistribute it and/or modify
