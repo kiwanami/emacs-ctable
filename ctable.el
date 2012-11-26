@@ -3,6 +3,7 @@
 ;; Copyright (C) 2011,2012 SAKURAI Masashi
 
 ;; Author: SAKURAI Masashi <m.sakurai at kiwanami.net>
+;; URL: https://github.com/kiwanami/emacs-ctable
 ;; Version: 0.1.1
 ;; Keywords: table
 
