@@ -63,7 +63,7 @@
 ;;   align : text alignment: 'left, 'right and 'center. (default: right)
 ;;   max-width : maximum width of the column. if nil, no constraint. (default: nil)
 ;;   min-width : minimum width of the column. if nil, no constraint. (default: nil)
-;;   click-hooks : a list of click action functions with two arguments
+;;   click-hooks : a list of functions for header clicking with two arguments
 ;;                 the `ctbl:component' object and the `ctbl:cmodel' one.
 ;;               (default: '(`ctbl:cmodel-sort-action'))
 
