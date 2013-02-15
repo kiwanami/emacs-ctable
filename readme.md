@@ -23,12 +23,12 @@ Giving a list of the rows list to the function `ctbl:popup-table-buffer-easy', a
  '((1 2 3 4) (5 6 7 8) (9 10 11 12)))
 ```
 
-Here is the result. The header titles are generated automatically.
+Here is the result image. The header titles are generated automatically.
 
 ![sample-1-1](img/sample-1-1.png)
 
 
-Giving two lists, the latter list is displayed at the header.
+Giving two lists, the latter list is displayed at header titles.
 
 ```lisp
 (ctbl:popup-table-buffer-easy 
@@ -36,13 +36,13 @@ Giving two lists, the latter list is displayed at the header.
  '(aaa bbb ccc ddd))
 ```
 
-Here is the result.
+Here is the result image.
 
 ![sample-1-2](img/sample-1-2.png)
 
 ## Basic Use
 
-The objects of ctable are designed by the MVC pattern. Programmers can customizes ctable objects to use rich table views in the applications easily.
+The objects of ctable are designed by the MVC pattern. Programmers can customize ctable objects to use rich table views in the applications easily.
 
 First, one defines the column model and data model for the user application. The former model defines how the column should be display, the latter one does the contents to display.
 
@@ -85,7 +85,7 @@ Here is a sample code for the model and view.
   (pop-to-buffer (ctbl:cp-get-buffer component)))
 ```
 
-Here is the result.
+Here is the result image.
 
 ![sample-2-1](img/sample-2-1.png)
 
