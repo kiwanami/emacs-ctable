@@ -42,7 +42,7 @@ Here is the result.
 
 ## Basic Use
 
-The objects of ctable are designed by the MVC pattern. Programers can customizes ctable objects to use rich table views in the applications easily.
+The objects of ctable are designed by the MVC pattern. Programmers can customizes ctable objects to use rich table views in the applications easily.
 
 First, one defines the column model and data model for the user application. The former model defines how the column should be display, the latter one does the contents to display.
 
@@ -90,13 +90,13 @@ Here is the result.
 ![sample-2-1](img/sample-2-1.png)
 
 
-The models have further options and functions to customize the display and behavior, such as column width, text alignment, sorting and so on. (See Model secion)
+The models have further options and functions to customize the display and behavior, such as column width, text alignment, sorting and so on. (See Model section)
 
 The key-binding on the table can be customized by the keymap object in the usual way. Then, the user program implements the custom function which refers the focused cell. (See Key Bindings section)
 
 The ctable framework provides some hooks to notify the usual events: click, selection change and update view. (See Event Handling section)
 
-The appearance of the table can be customized, such as foreground and background color, tablular lines. (See Display Parameter section)
+The appearance of the table can be customized, such as foreground and background color, tabular lines. (See Display Parameter section)
 
 ![ctable components](img/objects.png)
 
@@ -138,7 +138,7 @@ The keymap `ctbl:table-mode-map` is used as a default keymap on the table. This 
 
 The component functions `ctbl:create-table-component-buffer` and `ctbl:open-table-buffer` receive a `custom-map` argument to override the keymap on the table buffer. Because the functions connect the given keymap to the default keymap `ctbl:table-mode-map` as parent, application program may define the overriding entries.
 
-The component function `ctbl:create-table-component-region` receives a `keymap` argument to define the keymap on the each charactors in the table region.
+The component function `ctbl:create-table-component-region` receives a `keymap` argument to define the keymap on the each characters in the table region.
 
 The ctable framework provides some hooks for the usual event cases. In such cases, the application should use the event handlers, instead of defining the keymap. See the next section.
 
@@ -157,7 +157,7 @@ Here is a sample code for the click action:
 where, `cp` is an instance of ctable component. The function `ctbl:cp-add-click-hook` adds the given function as an event handler to the component instance. Here are event handler functions:
 
 - `ctbl:cp-add-click-hook` : on click
-- `ctbl:cp-add-selection-change-hook` : on selection chang
+- `ctbl:cp-add-selection-change-hook` : on selection change
 - `ctbl:cp-add-update-hook` : on update view
 
 The function `ctbl:cp-get-selected-data-row` returns a row object which is defined by the model.
@@ -202,8 +202,8 @@ Here is the details of the slot members of `ctbl:param`.
 |hline-colors   | "#RRGGBB" or '((0 . colorstr) (t . default-color)) or (lambda (model row-index) colorstr or nil) |
 |draw-vlines    | 'all or '(0 1 2 .. -1) or (lambda (model col-index) t or nil ) |
 |draw-hlines    | 'all or '(0 1 2 .. -1) or (lambda (model row-index) t or nil ) |
-|vertical-line | vartical line charactor |
-|horizontal-line | horizontal line charactor |
+|vertical-line | vertical line character |
+|horizontal-line | horizontal line character |
 |left-top-corner   | corner character |
 |right-top-corner  | corner character |
 |left-bottom-corner  | corner character |
