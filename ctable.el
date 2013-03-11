@@ -1,6 +1,6 @@
 ;;; ctable.el --- Table component for Emacs Lisp
 
-;; Copyright (C) 2011,2012 SAKURAI Masashi
+;; Copyright (C) 2011,2012,2013 SAKURAI Masashi
 
 ;; Author: SAKURAI Masashi <m.sakurai at kiwanami.net>
 ;; URL: https://github.com/kiwanami/emacs-ctable
@@ -1235,12 +1235,15 @@ This function assumes that the current buffer is the destination buffer."
              (loop for i in cols
                    for s = (if (stringp i) i (format "%s" i))
                    for fmt in column-format
+                   for cw in column-widths
                    for col-index from 0
                    for str = (ctbl:render-bg-color-put
                               (funcall fmt i) row-index col-index
                               model param)
                    collect
-                   (ctbl:tp str 'ctbl:cell-id (cons row-index col-index)))
+                   (propertize str
+                               'ctbl:cell-id (cons row-index col-index)
+                               'ctbl:cell-width cw))
              model param) EOL)
           (ctbl:state-set-current-data dstate (- row-num row-index)))
     ;; bottom border line
