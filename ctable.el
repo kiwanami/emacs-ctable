@@ -810,6 +810,7 @@ bug), this function may return nil."
         mode-name "Table Mode")
   (setq buffer-undo-list t
         buffer-read-only t)
+  (add-hook 'post-command-hook 'ctbl:start-tooltip-timer nil t)
   (run-hooks 'ctbl:table-mode-hook))
 
 
@@ -1265,12 +1266,31 @@ This function assumes that the current buffer is the destination buffer."
     (let ((message-log-max nil))
       (message string)))))
 
-(defun ctbl:show-cell-in-tooltip ()
-  "Show cell at point in tooltip."
+(defun ctbl:show-cell-in-tooltip (&optional unless-visible)
+  "Show cell at point in tooltip.
+When UNLESS-VISIBLE is non-nil, show tooltip only when data in
+cell is truncated."
   (interactive)
-  (let ((data (ctbl:cp-get-selected-data-cell (ctbl:cp-get-component))))
+  (let* ((cp (ctbl:cp-get-component))
+         (data (when cp (ctbl:cp-get-selected-data-cell cp))))
     (when data
-      (ctbl:pop-tooltip (if (stringp data) data (format "%S" data))))))
+      (let ((string (if (stringp data) data (format "%S" data)))
+            (width (get-text-property (point) 'ctbl:cell-width)))
+        (when (or (not unless-visible)
+                  (and (integerp width) (>= (length string) width)))
+          (ctbl:pop-tooltip string))))))
+
+(defvar ctbl:tooltip-delay 1)
+
+(defvar ctbl:tooltip-timer nil)
+
+(defun ctbl:start-tooltip-timer ()
+  (unless ctbl:tooltip-timer
+    (setq ctbl:tooltip-timer
+          (run-with-idle-timer ctbl:tooltip-delay nil
+                               (lambda ()
+                                 (ctbl:show-cell-in-tooltip t)
+                                 (setq ctbl:tooltip-timer nil))))))
 
 
 ;; Rendering utilities
