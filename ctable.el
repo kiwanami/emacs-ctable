@@ -109,6 +109,9 @@
    )
   "Default rendering parameters.")
 
+(defvar ctbl:tooltip-method '(pos-tip popup minibuffer)
+  "Preferred tooltip methods in order.")
+
 ;;; Faces
 
 (defface ctbl:face-row-select
@@ -1250,6 +1253,25 @@ This function assumes that the current buffer is the destination buffer."
     (ctbl:render-insert dstate
       (ctbl:render-make-hline column-widths model param -1))))
 
+(defun ctbl:pop-tooltip (string)
+  "[internal] Show STRING in tooltip."
+  (cond
+   ((and (memq 'pos-tip ctbl:tooltip-method) window-system (featurep 'pos-tip))
+    (pos-tip-show (ctbl:string-fill-paragraph string)
+                  'popup-tip-face nil nil 0))
+   ((and (memq 'popup ctbl:tooltip-method) (featurep 'popup))
+    (popup-tip string))
+   ((memq 'minibuffer ctbl:tooltip-method)
+    (let ((message-log-max nil))
+      (message string)))))
+
+(defun ctbl:show-cell-in-tooltip ()
+  "Show cell at point in tooltip."
+  (interactive)
+  (let ((data (ctbl:cp-get-selected-data-cell (ctbl:cp-get-component))))
+    (when data
+      (ctbl:pop-tooltip (if (stringp data) data (format "%S" data))))))
+
 
 ;; Rendering utilities
 
@@ -1351,6 +1373,15 @@ sides with the character PADDING."
                 for f = (funcall gen (1- (abs o)))
                 do (push f fs)
                 finally return (funcall to-bool (funcall chain fs))))))
+
+(defun ctbl:string-fill-paragraph (string &optional justify)
+  "[internal] `fill-paragraph' against STRING."
+  (with-temp-buffer
+    (erase-buffer)
+    (insert string)
+    (goto-char (point-min))
+    (fill-paragraph justify)
+    (buffer-string)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
