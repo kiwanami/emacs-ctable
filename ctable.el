@@ -109,6 +109,9 @@
    )
   "Default rendering parameters.")
 
+(defvar ctbl:tooltip-method '(pos-tip popup minibuffer)
+  "Preferred tooltip methods in order.")
+
 ;;; Faces
 
 (defface ctbl:face-row-select
@@ -807,6 +810,7 @@ bug), this function may return nil."
         mode-name "Table Mode")
   (setq buffer-undo-list t
         buffer-read-only t)
+  (add-hook 'post-command-hook 'ctbl:start-tooltip-timer nil t)
   (run-hooks 'ctbl:table-mode-hook))
 
 
@@ -1250,6 +1254,44 @@ This function assumes that the current buffer is the destination buffer."
     (ctbl:render-insert dstate
       (ctbl:render-make-hline column-widths model param -1))))
 
+(defun ctbl:pop-tooltip (string)
+  "[internal] Show STRING in tooltip."
+  (cond
+   ((and (memq 'pos-tip ctbl:tooltip-method) window-system (featurep 'pos-tip))
+    (pos-tip-show (ctbl:string-fill-paragraph string)
+                  'popup-tip-face nil nil 0))
+   ((and (memq 'popup ctbl:tooltip-method) (featurep 'popup))
+    (popup-tip string))
+   ((memq 'minibuffer ctbl:tooltip-method)
+    (let ((message-log-max nil))
+      (message string)))))
+
+(defun ctbl:show-cell-in-tooltip (&optional unless-visible)
+  "Show cell at point in tooltip.
+When UNLESS-VISIBLE is non-nil, show tooltip only when data in
+cell is truncated."
+  (interactive)
+  (let* ((cp (ctbl:cp-get-component))
+         (data (when cp (ctbl:cp-get-selected-data-cell cp))))
+    (when data
+      (let ((string (if (stringp data) data (format "%S" data)))
+            (width (get-text-property (point) 'ctbl:cell-width)))
+        (when (or (not unless-visible)
+                  (and (integerp width) (>= (length string) width)))
+          (ctbl:pop-tooltip string))))))
+
+(defvar ctbl:tooltip-delay 1)
+
+(defvar ctbl:tooltip-timer nil)
+
+(defun ctbl:start-tooltip-timer ()
+  (unless ctbl:tooltip-timer
+    (setq ctbl:tooltip-timer
+          (run-with-idle-timer ctbl:tooltip-delay nil
+                               (lambda ()
+                                 (ctbl:show-cell-in-tooltip t)
+                                 (setq ctbl:tooltip-timer nil))))))
+
 
 ;; Rendering utilities
 
@@ -1351,6 +1393,15 @@ sides with the character PADDING."
                 for f = (funcall gen (1- (abs o)))
                 do (push f fs)
                 finally return (funcall to-bool (funcall chain fs))))))
+
+(defun ctbl:string-fill-paragraph (string &optional justify)
+  "[internal] `fill-paragraph' against STRING."
+  (with-temp-buffer
+    (erase-buffer)
+    (insert string)
+    (goto-char (point-min))
+    (fill-paragraph justify)
+    (buffer-string)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
