@@ -45,29 +45,29 @@
 
 ;;; Models and Parameters
 
-;; ctbl:model / table model structure
-;;
-;;   data : Table data as a list of rows. A row contains a list of columns.
-;;   column-model : A list of column models.
-;;   sort-state : The current sort order as a list of column indexes.
-;;                The index number of the first column is 1.
-;;                If the index is negative, the sort order is reversed.
+(defstruct ctbl:model
+"Table model structure
 
-(defstruct ctbl:model data column-model sort-state)
+data : Table data as a list of rows. A row contains a list of columns.
+column-model : A list of column models.
+sort-state : The current sort order as a list of column indexes.
+             The index number of the first column is 1.
+             If the index is negative, the sort order is reversed."
+ data column-model sort-state)
 
-;; ctbl:cmodel / table column model structure
-;;
-;;   title : title string.
-;;   sorter : sorting function which transforms a cell value into sort value.
-;;            It should return -1, 0 and 1. If nil, `ctbl:sort-string-lessp' is used.
-;;   align : text alignment: 'left, 'right and 'center. (default: right)
-;;   max-width : maximum width of the column. if nil, no constraint. (default: nil)
-;;   min-width : minimum width of the column. if nil, no constraint. (default: nil)
-;;   click-hooks : a list of functions for header clicking with two arguments
-;;                 the `ctbl:component' object and the `ctbl:cmodel' one.
-;;               (default: '(`ctbl:cmodel-sort-action'))
+(defstruct ctbl:cmodel
+"Table column model structure
 
-(defstruct ctbl:cmodel title sorter align max-width min-width
+title  : title string.
+sorter : sorting function which transforms a cell value into sort value.
+         It should return -1, 0 and 1. If nil, `ctbl:sort-string-lessp' is used.
+align  : text alignment: 'left, 'right and 'center. (default: right)
+max-width : maximum width of the column. if nil, no constraint. (default: nil)
+min-width : minimum width of the column. if nil, no constraint. (default: nil)
+click-hooks : a list of functions for header clicking with two arguments
+              the `ctbl:component' object and the `ctbl:cmodel' one.
+            (default: '(`ctbl:cmodel-sort-action'))"
+ title sorter align max-width min-width
   (click-hooks '(ctbl:cmodel-sort-action)))
 
 ;; ctbl:param / rendering parameters
@@ -221,43 +221,44 @@ If the text already has some keymap property, the text is skipped."
 
 ;; Component
 
-;; This structure defines attributes of the table component.
-;; These attributes are internal use. Other programs should access
-;; through the functions of the component interface.
+(defstruct ctbl:component
+"Component
 
-;; [ctbl:component]
-;; dest         : an object of `ctbl:dest'
-;; model        : an object of the table model
-;; selected     : selected cell-id: (row index . col index)
-;; param        : rendering parameter object
-;; sorted-data  : sorted data to display the table view. 
-;;    see `ctbl:cp-get-selected-data-row' and `ctbl:cp-get-selected-data-cell'.
-;; update-hooks : a list of hook functions for update event
-;; selection-change-hooks : a list of hook functions for selection change event
-;; click-hooks            : a list of hook functions for click event
+This structure defines attributes of the table component.
+These attributes are internal use. Other programs should access
+through the functions of the component interface.
 
-(defstruct ctbl:component dest model param selected sorted-data
+dest         : an object of `ctbl:dest'
+model        : an object of the table model
+selected     : selected cell-id: (row index . col index)
+param        : rendering parameter object
+sorted-data  : sorted data to display the table view.
+   see `ctbl:cp-get-selected-data-row' and `ctbl:cp-get-selected-data-cell'.
+update-hooks : a list of hook functions for update event
+selection-change-hooks : a list of hook functions for selection change event
+click-hooks            : a list of hook functions for click event"
+  dest model param selected sorted-data
   update-hooks selection-change-hooks click-hooks)
 
 
 ;; Rendering Destination
 
-;; This structure object is the abstraction of the rendering
-;; destinations, such as buffers, regions and so on.
-
-;; [ctbl:dest]
-;; type        : identify symbol for destination type. (buffer, region, text)
-;; buffer      : a buffer object of rendering destination.
-;; min-func    : a function that returns upper limit of rendering destination.
-;; max-func    : a function that returns lower limit of rendering destination.
-;; width       : width of the reference size. (number, nil or full)
-;; height      : height of the reference size. (number, nil or full)
-;; clear-func  : a function that clears the rendering destination.
-;; before-update-func : a function that is called at the beginning of rendering routine.
-;; after-update-func  : a function that is called at the end of rendering routine.
-;; select-ol   : a list of overlays for selection
-
 (defstruct ctbl:dest
+"Rendering Destination
+
+This structure object is the abstraction of the rendering
+destinations, such as buffers, regions and so on.
+
+type        : identify symbol for destination type. (buffer, region, text)
+buffer      : a buffer object of rendering destination.
+min-func    : a function that returns upper limit of rendering destination.
+max-func    : a function that returns lower limit of rendering destination.
+width       : width of the reference size. (number, nil or full)
+height      : height of the reference size. (number, nil or full)
+clear-func  : a function that clears the rendering destination.
+before-update-func : a function that is called at the beginning of rendering routine.
+after-update-func  : a function that is called at the end of rendering routine.
+select-ol   : a list of overlays for selection"
   type buffer min-func max-func width height
   clear-func before-update-func after-update-func select-ol)
 
@@ -454,7 +455,7 @@ found at the variable, return nil."
   (let* ((rows (ctbl:component-sorted-data component))
          (cell-id (ctbl:component-selected component))
          (row-id (car cell-id)) (col-id (cdr cell-id)))
-    (if row-id 
+    (if row-id
         (nth col-id (nth row-id rows))
       nil)))
 
@@ -1098,7 +1099,7 @@ surplus width."
 (defun ctbl:state-over-p (state)
   "[internal] Return t if the current line number is over the
 maximum line number."
-  (and (ctbl:state-max state) 
+  (and (ctbl:state-max state)
        (<= (ctbl:state-max state) (ctbl:state-current state))))
 
 (defvar ctbl:continue-button-keymap
@@ -1185,16 +1186,16 @@ This function assumes that the current buffer is the destination buffer."
                  cmodels model param)))))
     (setq column-format (ctbl:render-get-formats cmodels column-widths))
     (catch 'ctbl:insert-break
-      (ctbl:render-main-header dest model param 
+      (ctbl:render-main-header dest model param
                                cmodels dstate column-widths)
-      (ctbl:render-main-content dest model param 
+      (ctbl:render-main-content dest model param
                                 cmodels drows dstate column-widths column-format))
     ;; return the sorted list
     rows))
 
 (defun ctbl:render-main-header (dest model param cmodels dstate column-widths)
   "[internal] Render the table header."
-  (let ((EOL "\n") 
+  (let ((EOL "\n")
         (header-string
          (ctbl:render-join-columns
           (loop for cm in cmodels
@@ -1224,7 +1225,7 @@ This function assumes that the current buffer is the destination buffer."
       (ctbl:render-insert dstate header-string EOL)  ; header columns
       ))))
 
-(defun ctbl:render-main-content (dest model param cmodels rows 
+(defun ctbl:render-main-content (dest model param cmodels rows
                                       dstate column-widths column-format)
   "[internal] Render the table content."
   (let ((EOL "\n") (row-num (length rows)))
@@ -1302,7 +1303,7 @@ cell is truncated."
       (let ((str (truncate-string-to-width
                   (substring org 0) limit-width 0 nil ellipsis)))
         (when (< limit-width (string-width str))
-          (setq str (truncate-string-to-width (substring org 0) 
+          (setq str (truncate-string-to-width (substring org 0)
                                               limit-width)))
         (propertize str 'mouse-face 'highlight)
         (unless (get-text-property 0 'help-echo str)
@@ -1468,7 +1469,7 @@ CUSTOM-MAP is the additional keymap that is added to default keymap `ctbl:table-
             (loop for i from 0 below col-num
                   for ch = (char-to-string (+ ?A i))
                   collect (make-ctbl:cmodel :title ch :min-width 5))))
-         (model 
+         (model
           (make-ctbl:model
            :column-model column-models :data rows))
          (cp (ctbl:create-table-component-buffer
@@ -1575,8 +1576,8 @@ WIDTH and HEIGHT are reference size of the table view."
              '(2 1)
              )
             :param param)))
-      (ctbl:cp-add-click-hook 
-       cp (lambda () (message "CTable : Click Hook [%S]" 
+      (ctbl:cp-add-click-hook
+       cp (lambda () (message "CTable : Click Hook [%S]"
                               (ctbl:cp-get-selected-data-row cp))))
       (ctbl:cp-add-selection-change-hook cp (lambda () (message "CTable : Select Hook")))
       (ctbl:cp-add-update-hook cp (lambda () (message "CTable : Update Hook")))
