@@ -571,12 +571,37 @@ HOOK is a function that has no argument."
                (funcall f)
              (error (message "Ctable: Update / Hook error %S [%s]" f err)))))
 
+(defun ctbl:find-position-fast (dest cell-id)
+  "[internal] Find the cell-id position using bi-section search."
+  (let* ((row-id (car cell-id)) 
+         (row-id-lim (max (- row-id 10) 0))
+         (min (ctbl:dest-point-min dest))
+         (max (ctbl:dest-point-max dest))
+         (mid (/ (+ min max) 2)))
+    (save-excursion
+      (loop for next = (next-single-property-change mid 'ctbl:cell-id nil max)
+            for cur-row-id = (and next (car (ctbl:cursor-to-cell next)))
+            do
+            (cond
+             ((null cur-row-id) (setq mid next))
+             ((= cur-row-id row-id)
+              (goto-char mid) (beginning-of-line)
+              (return (point)))
+             ((and (< row-id-lim cur-row-id) (< cur-row-id row-id))
+              (goto-char mid) (beginning-of-line) (forward-line)
+              (return (point)))
+             ((< cur-row-id row-id)
+              (setq min mid)
+              (setq mid (/ (+ min max) 2)))
+             ((< row-id cur-row-id)
+              (setq max mid)
+              (setq mid (/ (+ min max) 2))))))))
 
 (defun ctbl:find-by-cell-id (dest cell-id)
   "[internal] Return a point where the text property `ctbl:cell-id'
 is equal to cell-id in the current table view. If CELL-ID is not
 found in the current view, return nil."
-  (loop with pos = (ctbl:dest-point-min dest)
+  (loop with pos = (ctbl:find-position-fast dest cell-id)
         with end = (ctbl:dest-point-max dest)
         for next = (next-single-property-change pos 'ctbl:cell-id nil end)
         for text-cell = (and next (ctbl:cursor-to-cell next))
@@ -590,7 +615,7 @@ found in the current view, return nil."
 text-property `ctbl:cell-id' is equal to CELL-ID. The argument function FUNC
 receives two arguments, begin position and end one. This function is
 mainly used at functions for putting overlays."
-  (loop with pos = (ctbl:dest-point-min dest)
+  (loop with pos = (ctbl:find-position-fast dest cell-id)
         with end = (ctbl:dest-point-max dest)
         for next = (next-single-property-change pos 'ctbl:cell-id nil end)
         for text-id = (and next (ctbl:cursor-to-cell next))
@@ -598,7 +623,7 @@ mainly used at functions for putting overlays."
         (if (and text-id (equal cell-id text-id))
             (let ((cend (next-single-property-change
                          next 'ctbl:cell-id nil end)))
-              (funcall func next cend)))
+              (return (funcall func next cend))))
         (setq pos next)))
 
 (defun ctbl:find-all-by-row-id (dest row-id func)
@@ -607,15 +632,19 @@ row-id of the text-property `ctbl:cell-id' is equal to
 ROW-ID. The argument function FUNC receives three arguments,
 cell-id, begin position and end one. This function is mainly used
 at functions for putting overlays."
-  (loop with pos = (ctbl:dest-point-min dest)
+  (loop with pos = (ctbl:find-position-fast dest (cons row-id nil))
         with end = (ctbl:dest-point-max dest)
         for next = (next-single-property-change pos 'ctbl:cell-id nil end)
         for text-id = (and next (ctbl:cursor-to-cell next))
         while (and next (< next end)) do
-        (if (and text-id (equal row-id (car text-id)))
+        (when text-id
+          (cond
+           ((equal row-id (car text-id))
             (let ((cend (next-single-property-change
                          next 'ctbl:cell-id nil end)))
               (funcall func text-id next cend)))
+           ((< row-id (car text-id))
+            (return nil))))
         (setq pos next)))
 
 (defun ctbl:find-first-cell (dest)
