@@ -468,6 +468,11 @@ found at the variable, return nil."
   "Return the model object."
   (ctbl:component-model component))
 
+(defun ctbl:cp-set-model (component model)
+  "Replace the model object and update the destination."
+  (setf (ctbl:component-model component) model)
+  (ctbl:cp-update component))
+
 (defun ctbl:cp-get-param (component)
   "Return a rendering parameter object."
   (ctbl:component-param component))
@@ -526,7 +531,7 @@ HOOK is a function that has no argument."
 ;; Component : privates
 
 (defun ctbl:cp-update (component)
-  "[internal] Clear and re-draw the component content."
+  "Clear and re-draw the component content."
   (let* ((buf  (ctbl:cp-get-buffer component))
          (dest (ctbl:component-dest component)))
     (with-current-buffer buf
