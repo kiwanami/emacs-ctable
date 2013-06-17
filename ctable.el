@@ -583,6 +583,7 @@ HOOK is a function that has no argument."
             for cur-row-id = (and next (car (ctbl:cursor-to-cell next)))
             do
             (cond
+             ((>= next max) (return (point)))
              ((null cur-row-id) (setq mid next))
              ((= cur-row-id row-id)
               (goto-char mid) (beginning-of-line)
