@@ -60,7 +60,7 @@ sort-state : The current sort order as a list of column indexes.
 (defstruct ctbl:async-model
   "Asynchronous data model
 
-request  : Data request function which receives 3 arguments (row-num f(row-list) f(errsym)). [must]
+request  : Data request function which receives 3 arguments (begin-num length f(row-list) f(errsym)). [must]
 init-num : Initial row number. (Default 20)
 more-num : Increase row number. (Default 20)
 cancel   : cancel function of data requesting. (Can be nil)"
@@ -551,7 +551,7 @@ HOOK is a function that has no argument."
         (ctbl:dest-with-region dest
           (ctbl:dest-clear dest)
           (cond
-           ((ctbl:async-model-p 
+           ((ctbl:async-model-p
              (ctbl:model-data (ctbl:component-model component)))
             ;; asynchronous model
             (lexical-let ((cp component))
@@ -613,7 +613,7 @@ HOOK is a function that has no argument."
 
 (defun ctbl:find-position-fast (dest cell-id)
   "[internal] Find the cell-id position using bi-section search."
-  (let* ((row-id (car cell-id)) 
+  (let* ((row-id (car cell-id))
          (row-id-lim (max (- row-id 10) 0))
          (min (ctbl:dest-point-min dest))
          (max (ctbl:dest-point-max dest))
@@ -1281,18 +1281,19 @@ This function assumes that the current buffer is the destination buffer."
 (defstruct ctbl:async-state
   "Rendering State [internal]
 
-status : symbol -> 
+status : symbol ->
            normal : data still remains. this is the start state.
            requested : requested data and waiting for response.
            done : no data remains. this is the final state.
 actual-width   : actual width
 column-widths  : width of each columns
 column-formats : format of each columns
+next-index     : row index number for next request
 panel-begin    : begin mark object for status panel
 panel-end      : end mark object for status panel
 "
   status actual-width column-widths column-formats
-  panel-begin panel-end)
+  next-index panel-begin panel-end)
 
 (defun ctbl:render-async-main (dest model param rows-setter)
   "[internal] Rendering the table view for async data model.
@@ -1301,12 +1302,14 @@ This function assumes that the current buffer is the destination buffer."
       ((dest dest) (model model) (param param) (rows-setter rows-setter)
        (amodel (ctbl:model-data model)) (buf (current-buffer))
        (cmodels (ctbl:model-column-model model)))
-    (funcall 
-     (ctbl:async-model-request amodel) 0
+    (funcall
+     (ctbl:async-model-request amodel)
+     0 (ctbl:async-model-init-num amodel)
      (lambda (rows)
        (with-current-buffer buf
-         (let 
-             ((column-widths
+         (let
+             (buffer-read-only
+              (column-widths
                (loop for c in cmodels
                      for title = (ctbl:cmodel-title c)
                      collect (max (or (ctbl:cmodel-min-width c) 0)
@@ -1331,17 +1334,18 @@ This function assumes that the current buffer is the destination buffer."
              (setq mark-panel-end (point-marker))
              (setq astate
                    (make-ctbl:async-state
-                    :status 'normal 
+                    :status 'normal
                     :actual-width (+ (ctbl:render-sum-vline-widths cmodels model param)
                                      (loop for i in column-widths sum i))
                     :column-widths column-widths :column-formats column-formats
+                    :next-index (length rows)
                     :panel-begin mark-panel-begin :panel-end mark-panel-end))
-             (ctbl:render-async-panel dest astate)
+             (ctbl:render-async-panel dest astate amodel)
              (funcall rows-setter rows astate)))))
-     (lambda (errsym) 
+     (lambda (errsym)
        (message "ctable : error -> %S" errsym)))))
 
-(defun ctbl:render-async-panel (dest astate)
+(defun ctbl:render-async-panel (dest astate amodel)
   "[internal] Rendering data model status panel with current state."
   (let ((begin (ctbl:async-state-panel-begin astate))
         (end (ctbl:async-state-panel-end astate))
@@ -1353,14 +1357,18 @@ This function assumes that the current buffer is the destination buffer."
       (insert
        (propertize
         (case (ctbl:async-state-status astate)
-          ('done 
+          ('done
            (ctbl:format-center width "No more data."))
           ('requested
-           (ctbl:format-center width "(Waiting for data...)"))
+           (cond
+            ((ctbl:async-model-cancel amodel)
+             (ctbl:format-center width "(Waiting for data. [Click to Cancel])"))
+            (t
+             (ctbl:format-center width "(Waiting for data...)"))))
           ('normal
            (ctbl:format-center width "[Click to retrieve more data.]"))
           (t
-           (ctbl:format-center 
+           (ctbl:format-center
             width (format "(Error : %s)" (ctbl:async-state-status astate)))))
         'keymap ctbl:continue-button-keymap
         'face 'ctbl:face-continue-bar
@@ -1370,9 +1378,20 @@ This function assumes that the current buffer is the destination buffer."
 (defun ctbl:action-continue-async-clicked ()
   "Action for clicking the continue button."
   (interactive)
-  (lexical-let ((cp (ctbl:cp-get-component)))
-    (when (and cp (eq 'normal (ctbl:async-state-status (ctbl:cp-states-get cp 'async-state))))
-      (ctbl:render-async-continue cp))))
+  (lexical-let*
+      ((cp (ctbl:cp-get-component))
+       (amodel (ctbl:model-data (ctbl:cp-get-model cp)))
+       (astate (ctbl:cp-states-get cp 'async-state)))
+    (when cp
+      (case (ctbl:async-state-status astate)
+        ('normal 
+         (ctbl:render-async-continue cp))
+        ('requested
+         (when (ctbl:async-model-cancel amodel)
+           (funcall (ctbl:async-model-cancel amodel))
+           (setf (ctbl:async-state-status astate) 'normal)
+           (ctbl:render-async-panel 
+            (ctbl:component-dest cp) astate amodel)))))))
 
 (defun ctbl:render-async-continue (component)
   "[internal] Rendering subsequent data asynchronously."
@@ -1381,38 +1400,48 @@ This function assumes that the current buffer is the destination buffer."
        (model  (ctbl:cp-get-model cp))
        (amodel (ctbl:model-data model))
        (astate (ctbl:cp-states-get cp 'async-state))
-       (begin-index (length (ctbl:component-sorted-data cp))))
+       (begin-index (ctbl:async-state-next-index astate)))
     ;; status update
     (setf (ctbl:async-state-status astate) 'requested)
-    (ctbl:render-async-panel dest astate)
-    (funcall ; request async data
-     (ctbl:async-model-request amodel) begin-index
-     (lambda (rows)
+    (ctbl:render-async-panel dest astate amodel)
+    (condition-case err
+        (funcall ; request async data
+         (ctbl:async-model-request amodel)
+         begin-index (ctbl:async-model-more-num amodel)
+         (lambda (rows)
+           (with-current-buffer buf
+             (let (buffer-read-only)
+               (cond
+                ((null rows)
+                 ;; no more data
+                 (setf (ctbl:async-state-status astate) 'done))
+                (t
+                 ;; continue data
+                 (goto-char (1- (marker-position (ctbl:async-state-panel-begin astate))))
+                 (insert "\n")
+                 (ctbl:render-main-content
+                  dest model (ctbl:cp-get-param cp) (ctbl:model-column-model model)
+                  rows (ctbl:async-state-column-widths astate)
+                  (ctbl:async-state-column-formats astate) begin-index)
+                 (setf (ctbl:async-state-status astate) 'normal)
+                 (delete-backward-char 1)))
+               ;; status update
+               (ctbl:render-async-panel dest astate amodel)
+               ;; append row data (side effect!)
+               (setf (ctbl:component-sorted-data cp)
+                     (append (ctbl:component-sorted-data cp) rows))
+               (setf (ctbl:async-state-next-index astate)
+                     (+ (length rows) begin-index)))))
+         (lambda (errsym)
+           (with-current-buffer buf
+             (setf (ctbl:async-state-status astate) errsym)
+             (ctbl:render-async-panel dest astate amodel)
+             (message "ctable : error -> %S" errsym))))
+      (error
        (with-current-buffer buf
-         (let (buffer-read-only)
-           (cond
-            ((null rows)
-             ;; no more data
-             (setf (ctbl:async-state-status astate) 'done))
-            (t
-             ;; continue data
-             (goto-char (1- (marker-position (ctbl:async-state-panel-begin astate))))
-             (insert "\n")
-             (ctbl:render-main-content 
-              dest model (ctbl:cp-get-param cp) (ctbl:model-column-model model)
-              rows (ctbl:async-state-column-widths astate)
-              (ctbl:async-state-column-formats astate) begin-index)
-             (setf (ctbl:async-state-status astate) 'normal)
-             (delete-backward-char 1)))
-           ;; status update
-           (ctbl:render-async-panel dest astate)
-           ;; append row data
-           (setf (ctbl:component-sorted-data cp)
-                 (append (ctbl:component-sorted-data cp) rows)))))
-     (lambda (errsym)
-       (setf (ctbl:async-state-status astate) errsym)
-       (ctbl:render-async-panel dest astate)
-       (message "ctable : error -> %S" errsym)))))
+         (setf (ctbl:async-state-status astate) (cadr err))
+         (ctbl:render-async-panel dest astate amodel)
+         (message "ctable : error -> %S" err))))))
 
 
 ;; tooltip
@@ -1722,7 +1751,7 @@ WIDTH and HEIGHT are reference size of the table view."
                     :sorter (lambda (a b) (ctbl:sort-number-lessp (length a) (length b))))
                    (make-ctbl:cmodel
                     :title "Comment" :align 'left))
-             :data 
+             :data
              '((1  "Bon Tanaka" "8 Year Curry." 'a)
                (2  "Bon Tanaka" "Nan-ban Curry." 'b)
                (3  "Bon Tanaka" "Half Curry." 'c)
