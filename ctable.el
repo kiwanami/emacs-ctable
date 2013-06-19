@@ -46,17 +46,29 @@
 ;;; Models and Parameters
 
 (defstruct ctbl:model
-"Table model structure
+  "Table model structure
 
 data : Table data as a list of rows. A row contains a list of columns.
+       If an instance of `ctbl:async-model' is given, the model is built up asynchronously.
 column-model : A list of column models.
 sort-state : The current sort order as a list of column indexes.
              The index number of the first column is 1.
              If the index is negative, the sort order is reversed."
- data column-model sort-state)
+  data column-model sort-state)
+
+
+(defstruct ctbl:async-model
+  "Asynchronous data model
+
+request  : Data request function which receives 3 arguments (row-num f(row-list) f(errsym)). [must]
+init-num : Initial row number. (Default 20)
+more-num : Increase row number. (Default 20)
+cancel   : cancel function of data requesting. (Can be nil)"
+  request init-num more-num cancel)
+
 
 (defstruct ctbl:cmodel
-"Table column model structure
+  "Table column model structure
 
 title  : title string.
 sorter : sorting function which transforms a cell value into sort value.
@@ -67,14 +79,12 @@ min-width : minimum width of the column. if nil, no constraint. (default: nil)
 click-hooks : a list of functions for header clicking with two arguments
               the `ctbl:component' object and the `ctbl:cmodel' one.
             (default: '(`ctbl:cmodel-sort-action'))"
- title sorter align max-width min-width
+  title sorter align max-width min-width
   (click-hooks '(ctbl:cmodel-sort-action)))
 
-;; ctbl:param / rendering parameters
-;;
 
 (defstruct ctbl:param
-"Rendering parameters
+  "Rendering parameters
 
 display-header : if t, display the header row with column models.
 fixed-header   : if t, display the header row in the header-line area.
@@ -165,7 +175,7 @@ top-junction bottom-junction left-junction right-junction cross-junction : +"
 (defun ctbl:tp (text prop value)
   "[internal] Put a text property to the entire text string."
   (if (< 0 (length text))
-    (put-text-property 0 (length text) prop value text))
+      (put-text-property 0 (length text) prop value text))
   text)
 
 (defvar ctbl:uid 1)
@@ -222,12 +232,12 @@ If the text already has some keymap property, the text is skipped."
     (ctbl:cp-update cp)))
 
 
-;;; Structures
+;;; ctable framework
 
 ;; Component
 
 (defstruct ctbl:component
-"Component
+  "Component
 
 This structure defines attributes of the table component.
 These attributes are internal use. Other programs should access
@@ -241,15 +251,16 @@ sorted-data  : sorted data to display the table view.
    see `ctbl:cp-get-selected-data-row' and `ctbl:cp-get-selected-data-cell'.
 update-hooks : a list of hook functions for update event
 selection-change-hooks : a list of hook functions for selection change event
-click-hooks            : a list of hook functions for click event"
+click-hooks            : a list of hook functions for click event
+states       : alist of arbitrary data for internal use"
   dest model param selected sorted-data
-  update-hooks selection-change-hooks click-hooks)
+  update-hooks selection-change-hooks click-hooks states)
 
 
 ;; Rendering Destination
 
 (defstruct ctbl:dest
-"Rendering Destination
+  "Rendering Destination
 
 This structure object is the abstraction of the rendering
 destinations, such as buffers, regions and so on.
@@ -341,7 +352,7 @@ MARK-END are separated by more than one character, such as a
 space.  This destination is employed to be embedded in the some
 application buffer.  Because this destination does not set up
 any modes and key maps for the buffer, the application that uses
-the calfw is responsible to manage the buffer and key maps."
+the ctable is responsible to manage the buffer and key maps."
   (lexical-let
       ((mark-begin mark-begin) (mark-end mark-end)
        (window (or (get-buffer-window buf) (selected-window))))
@@ -354,9 +365,8 @@ the calfw is responsible to manage the buffer and key maps."
      :height height
      :clear-func
      (lambda ()
-         (ctbl:dest-region-clear (marker-position mark-begin)
-                                (marker-position mark-end)))
-     )))
+       (ctbl:dest-region-clear (marker-position mark-begin)
+                               (marker-position mark-end))))))
 
 (defun ctbl:dest-region-clear (begin end)
   "[internal] Clear the content text."
@@ -413,7 +423,7 @@ the calfw is responsible to manage the buffer and key maps."
     (setf (ctbl:dest-select-ol dest) ols)))
 
 
-;; Component
+;; Component implementation
 
 (defun ctbl:cp-new (dest model param)
   "[internal] Create a new component object.
@@ -528,7 +538,7 @@ HOOK is a function that has no argument."
 HOOK is a function that has no argument."
   (push hook (ctbl:component-click-hooks component)))
 
-;; Component : privates
+;; update
 
 (defun ctbl:cp-update (component)
   "Clear and re-draw the component content."
@@ -540,15 +550,45 @@ HOOK is a function that has no argument."
       (let (buffer-read-only)
         (ctbl:dest-with-region dest
           (ctbl:dest-clear dest)
-          (setf (ctbl:component-sorted-data component)
-                (ctbl:render-main
-                 dest
-                 (ctbl:component-model component)
-                 (ctbl:component-param component)))))
+          (cond
+           ((ctbl:async-model-p 
+             (ctbl:model-data (ctbl:component-model component)))
+            ;; asynchronous model
+            (lexical-let ((cp component))
+              (ctbl:render-async-main
+               dest
+               (ctbl:component-model component)
+               (ctbl:component-param component)
+               (lambda (rows &optional astate)
+                 (setf (ctbl:component-sorted-data cp) rows)
+                 (when astate
+                   (ctbl:cp-states-set cp 'async-state astate))))))
+           (t
+            ;; synchronous model
+            (setf (ctbl:component-sorted-data component)
+                  (ctbl:render-main
+                   dest
+                   (ctbl:component-model component)
+                   (ctbl:component-param component)))))))
       (ctbl:cp-set-selected-cell
        component (ctbl:component-selected component))
       (ctbl:dest-after-update dest)
       (ctbl:cp-fire-update-hooks component))))
+
+;; Component : privates
+
+(defun ctbl:cp-states-get (component key)
+  "[internal] Get a value from COMPONENT with KEY."
+  (cdr (assq key (ctbl:component-states component))))
+
+(defun ctbl:cp-states-set (component key value)
+  "[internal] Set a value with KEY."
+  (let ((pair (assq key (ctbl:component-states component))))
+    (cond
+     ((null pair)
+      (push (cons key value) (ctbl:component-states component)))
+     (t
+      (setf (cdr pair) value)))))
 
 (defun ctbl:cp-fire-click-hooks (component)
   "[internal] Call click hook functions of the component with no arguments."
@@ -1111,74 +1151,6 @@ surplus width."
       (incf sum))
     sum))
 
-(defun ctbl:state-new (max-height data)
-  "[internal] Create output state object. see `ctbl:render-insert' function."
-  ;; (current-line max-height data)
-  (list 0 max-height data))
-
-(defun ctbl:state-current (state)
-  "[internal] Return the current line number."
-  (car state))
-
-(defun ctbl:state-max (state)
-  "[internal] Return the maximum line number or nil."
-  (cadr state))
-
-(defun ctbl:state-increment (state)
-  "[internal] Increment the current line number."
-  (incf (car state)))
-
-(defun ctbl:state-set-current-data (state data)
-  "[internal] Set DATA at the data slot of STATE."
-  (setf (nth 2 state) data))
-
-(defun ctbl:state-get-current-data (state)
-  "[internal] Return an object in the data slot of STATE."
-  (nth 2 state))
-
-(defun ctbl:state-over-p (state)
-  "[internal] Return t if the current line number is over the
-maximum line number."
-  (and (ctbl:state-max state)
-       (<= (ctbl:state-max state) (ctbl:state-current state))))
-
-(defvar ctbl:continue-button-keymap
-  (ctbl:define-keymap
-   '(([mouse-1] . ctbl:action-continue-clicked)
-     ("C-m" . ctbl:action-continue-clicked)
-     ("RET" . ctbl:action-continue-clicked)
-     ))
-  "Keymap for the continue button.")
-
-(defun ctbl:render-insert (state &rest args)
-  "[internal] Insert ARGS into the current buffer.
-If the current line number is over the limit, this function
-throws `ctbl:insert-break' symbol to break loop."
-  (let ((str (apply 'concat args)))
-    (unless (or (null args) (equal "" str))
-      (insert str)
-      (ctbl:state-increment state)
-      (when (ctbl:state-over-p state)
-        (let* ((msg (format "[Continue... (%s)]" ; data => remain row number
-                            (ctbl:state-get-current-data state)))
-               (nextbar (ctbl:format-center ; -1 => chop EOL
-                        (1- (length str)) msg)))
-          (insert (propertize nextbar
-                              'keymap ctbl:continue-button-keymap
-                              'face 'ctbl:face-continue-bar
-                              'mouse-face 'highlight) "\n"))
-        (throw 'ctbl:insert-break nil)))))
-(put 'ctbl:render-insert 'lisp-indent-function 1)
-
-(defun ctbl:action-continue-clicked ()
-  "Action for clicking the continue button."
-  (interactive)
-  (let ((cp (ctbl:cp-get-component)))
-    (when cp
-      (let ((dest (ctbl:component-dest cp)))
-        (setf (ctbl:dest-height dest) nil)
-        (ctbl:cp-update cp)))))
-
 (defun ctbl:dest-width-get (dest)
   "[internal] Return the column number to draw the table view.
 Return nil, if the width is not given. Then, the renderer draws freely."
@@ -1207,13 +1179,12 @@ This function assumes that the current buffer is the destination buffer."
          (rows (ctbl:sort
                 (copy-sequence (ctbl:model-data model)) cmodels
                 (ctbl:model-sort-state model)))
-         (dstate (ctbl:state-new (ctbl:dest-height-get dest) rows))
          (column-widths
           (loop for c in cmodels
                 for title = (ctbl:cmodel-title c)
                 collect (max (or (ctbl:cmodel-min-width c) 0)
                              (or (and title (length title)) 0))))
-         column-format)
+         column-formats)
     ;; check cell widths
     (setq drows (ctbl:render-check-cell-width rows cmodels column-widths))
     ;; adjust cell widths for ctbl:dest width
@@ -1224,16 +1195,16 @@ This function assumes that the current buffer is the destination buffer."
              (- (ctbl:dest-width-get dest)
                 (ctbl:render-sum-vline-widths
                  cmodels model param)))))
-    (setq column-format (ctbl:render-get-formats cmodels column-widths))
+    (setq column-formats (ctbl:render-get-formats cmodels column-widths))
     (catch 'ctbl:insert-break
       (ctbl:render-main-header dest model param
-                               cmodels dstate column-widths)
+                               cmodels column-widths)
       (ctbl:render-main-content dest model param
-                                cmodels drows dstate column-widths column-format))
+                                cmodels drows column-widths column-formats))
     ;; return the sorted list
     rows))
 
-(defun ctbl:render-main-header (dest model param cmodels dstate column-widths)
+(defun ctbl:render-main-header (dest model param cmodels column-widths)
   "[internal] Render the table header."
   (let ((EOL "\n")
         (header-string
@@ -1253,47 +1224,198 @@ This function assumes that the current buffer is the destination buffer."
            (ctbl:param-fixed-header param))
       ;; buffer header-line
       (let* ((fcol (/ (car (window-fringes))
-                     (frame-char-width)))
+                      (frame-char-width)))
              (header-text (concat (make-string fcol ? ) header-string)))
         (setq header-line-format header-text)
         ;; save header-text for hscroll updating
         (set (make-local-variable 'ctbl:header-text) header-text)))
      (t
       ;; content area
-      (ctbl:render-insert dstate ; border line
+      (insert ; border line
         (ctbl:render-make-hline column-widths model param 0))
-      (ctbl:render-insert dstate header-string EOL)  ; header columns
+      (insert header-string EOL)  ; header columns
       ))))
 
 (defun ctbl:render-main-content (dest model param cmodels rows
-                                      dstate column-widths column-format)
+                                      column-widths column-formats
+                                      &optional begin-index)
   "[internal] Render the table content."
+  (unless begin-index
+    (setq begin-index 0))
   (let ((EOL "\n") (row-num (length rows)))
     (loop for cols in rows
-          for row-index from 0
+          for row-index from begin-index
           do
-          (ctbl:render-insert dstate
+          (insert
             (ctbl:render-make-hline
              column-widths model param (1+ row-index)))
-          (ctbl:render-insert dstate
+          (insert
             (ctbl:render-join-columns
              (loop for i in cols
                    for s = (if (stringp i) i (format "%s" i))
-                   for fmt in column-format
+                   for fmt in column-formats
                    for cw in column-widths
                    for col-index from 0
                    for str = (ctbl:render-bg-color-put
-                              (funcall fmt i) row-index col-index
+                              (funcall fmt s) row-index col-index
                               model param)
                    collect
                    (propertize str
                                'ctbl:cell-id (cons row-index col-index)
                                'ctbl:cell-width cw))
-             model param) EOL)
-          (ctbl:state-set-current-data dstate (- row-num row-index)))
+             model param) EOL))
     ;; bottom border line
-    (ctbl:render-insert dstate
+    (insert
       (ctbl:render-make-hline column-widths model param -1))))
+
+;; rendering async data model
+
+(defvar ctbl:continue-button-keymap
+  (ctbl:define-keymap
+   '(([mouse-1] . ctbl:action-continue-async-clicked)
+     ("C-m" . ctbl:action-continue-async-clicked)
+     ("RET" . ctbl:action-continue-async-clicked)
+     ))
+  "Keymap for the continue button.")
+
+(defstruct ctbl:async-state
+  "Rendering State [internal]
+
+status : symbol -> 
+           normal : data still remains. this is the start state.
+           requested : requested data and waiting for response.
+           done : no data remains. this is the final state.
+actual-width   : actual width
+column-widths  : width of each columns
+column-formats : format of each columns
+panel-begin    : begin mark object for status panel
+panel-end      : end mark object for status panel
+"
+  status actual-width column-widths column-formats
+  panel-begin panel-end)
+
+(defun ctbl:render-async-main (dest model param rows-setter)
+  "[internal] Rendering the table view for async data model.
+This function assumes that the current buffer is the destination buffer."
+  (lexical-let*
+      ((dest dest) (model model) (param param) (rows-setter rows-setter)
+       (amodel (ctbl:model-data model)) (buf (current-buffer))
+       (cmodels (ctbl:model-column-model model)))
+    (funcall 
+     (ctbl:async-model-request amodel) 0
+     (lambda (rows)
+       (with-current-buffer buf
+         (let 
+             ((column-widths
+               (loop for c in cmodels
+                     for title = (ctbl:cmodel-title c)
+                     collect (max (or (ctbl:cmodel-min-width c) 0)
+                                  (or (and title (length title)) 0))))
+              (EOL "\n") drows column-formats)
+           ;; check cell widths
+           (setq drows (ctbl:render-check-cell-width rows cmodels column-widths))
+           ;; adjust cell widths for ctbl:dest width
+           (when (ctbl:dest-width-get dest)
+             (setq column-widths
+                   (ctbl:render-adjust-cell-width
+                    cmodels column-widths
+                    (- (ctbl:dest-width-get dest)
+                       (ctbl:render-sum-vline-widths
+                        cmodels model param)))))
+           (setq column-formats (ctbl:render-get-formats cmodels column-widths))
+           (ctbl:render-main-header dest model param cmodels column-widths)
+           (ctbl:render-main-content dest model param cmodels drows column-widths column-formats)
+           (let (mark-panel-begin mark-panel-end astate)
+             (setq mark-panel-begin (point-marker))
+             (insert "\n")
+             (setq mark-panel-end (point-marker))
+             (setq astate
+                   (make-ctbl:async-state
+                    :status 'normal 
+                    :actual-width (+ (ctbl:render-sum-vline-widths cmodels model param)
+                                     (loop for i in column-widths sum i))
+                    :column-widths column-widths :column-formats column-formats
+                    :panel-begin mark-panel-begin :panel-end mark-panel-end))
+             (ctbl:render-async-panel dest astate)
+             (funcall rows-setter rows astate)))))
+     (lambda (errsym) 
+       (message "ctable : error -> %S" errsym)))))
+
+(defun ctbl:render-async-panel (dest astate)
+  "[internal] Rendering data model status panel with current state."
+  (let ((begin (ctbl:async-state-panel-begin astate))
+        (end (ctbl:async-state-panel-end astate))
+        (width (ctbl:async-state-actual-width astate)))
+    (let (buffer-read-only)
+      (when (< 2 (- end begin))
+        (delete-region begin (1- end)))
+      (goto-char begin)
+      (insert
+       (propertize
+        (case (ctbl:async-state-status astate)
+          ('done 
+           (ctbl:format-center width "No more data."))
+          ('requested
+           (ctbl:format-center width "(Waiting for data...)"))
+          ('normal
+           (ctbl:format-center width "[Click to retrieve more data.]"))
+          (t
+           (ctbl:format-center 
+            width (format "(Error : %s)" (ctbl:async-state-status astate)))))
+        'keymap ctbl:continue-button-keymap
+        'face 'ctbl:face-continue-bar
+        'mouse-face 'highlight)
+       "\n"))))
+
+(defun ctbl:action-continue-async-clicked ()
+  "Action for clicking the continue button."
+  (interactive)
+  (lexical-let ((cp (ctbl:cp-get-component)))
+    (when (and cp (eq 'normal (ctbl:async-state-status (ctbl:cp-states-get cp 'async-state))))
+      (ctbl:render-async-continue cp))))
+
+(defun ctbl:render-async-continue (component)
+  "[internal] Rendering subsequent data asynchronously."
+  (lexical-let*
+      ((cp component) (dest (ctbl:component-dest cp)) (buf (current-buffer))
+       (model  (ctbl:cp-get-model cp))
+       (amodel (ctbl:model-data model))
+       (astate (ctbl:cp-states-get cp 'async-state))
+       (begin-index (length (ctbl:component-sorted-data cp))))
+    ;; status update
+    (setf (ctbl:async-state-status astate) 'requested)
+    (ctbl:render-async-panel dest astate)
+    (funcall ; request async data
+     (ctbl:async-model-request amodel) begin-index
+     (lambda (rows)
+       (with-current-buffer buf
+         (let (buffer-read-only)
+           (cond
+            ((null rows)
+             ;; no more data
+             (setf (ctbl:async-state-status astate) 'done))
+            (t
+             ;; continue data
+             (goto-char (1- (marker-position (ctbl:async-state-panel-begin astate))))
+             (insert "\n")
+             (ctbl:render-main-content 
+              dest model (ctbl:cp-get-param cp) (ctbl:model-column-model model)
+              rows (ctbl:async-state-column-widths astate)
+              (ctbl:async-state-column-formats astate) begin-index)
+             (setf (ctbl:async-state-status astate) 'normal)
+             (delete-backward-char 1)))
+           ;; status update
+           (ctbl:render-async-panel dest astate)
+           ;; append row data
+           (setf (ctbl:component-sorted-data cp)
+                 (append (ctbl:component-sorted-data cp) rows)))))
+     (lambda (errsym)
+       (setf (ctbl:async-state-status astate) errsym)
+       (ctbl:render-async-panel dest astate)
+       (message "ctable : error -> %S" errsym)))))
+
+
+;; tooltip
 
 (defun ctbl:pop-tooltip (string)
   "[internal] Show STRING in tooltip."
@@ -1600,7 +1722,7 @@ WIDTH and HEIGHT are reference size of the table view."
                     :sorter (lambda (a b) (ctbl:sort-number-lessp (length a) (length b))))
                    (make-ctbl:cmodel
                     :title "Comment" :align 'left))
-             :data
+             :data 
              '((1  "Bon Tanaka" "8 Year Curry." 'a)
                (2  "Bon Tanaka" "Nan-ban Curry." 'b)
                (3  "Bon Tanaka" "Half Curry." 'c)
