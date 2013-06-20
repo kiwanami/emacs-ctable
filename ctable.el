@@ -4,7 +4,7 @@
 
 ;; Author: SAKURAI Masashi <m.sakurai at kiwanami.net>
 ;; URL: https://github.com/kiwanami/emacs-ctable
-;; Version: 0.1.1
+;; Version: 0.1.2
 ;; Keywords: table
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -60,11 +60,16 @@ sort-state : The current sort order as a list of column indexes.
 (defstruct ctbl:async-model
   "Asynchronous data model
 
-request  : Data request function which receives 3 arguments (begin-num length f(row-list) f(errsym)). [must]
+request  : Data request function which receives 4 arguments (begin-num length fn(row-list) fe(errmsg)).
+           This function should return the next data which begins with `begin-num' and has the length 
+           as `length', evaluating the continuation function `fn' with the data.
+           If the function `fn' is given `nil', it means no more data.
+           If the error function `fe' is evaluated with `errmsg', the message is displayed for the user.
 init-num : Initial row number. (Default 20)
 more-num : Increase row number. (Default 20)
-cancel   : cancel function of data requesting. (Can be nil)"
-  request init-num more-num cancel)
+reset    : Reset function which is called when user executes update command. (Can be nil)
+cancel   : Cancel function of data requesting. (Can be nil)"
+  request init-num more-num reset cancel)
 
 
 (defstruct ctbl:cmodel
@@ -555,6 +560,7 @@ HOOK is a function that has no argument."
            ((ctbl:async-model-p
              (ctbl:model-data (ctbl:component-model component)))
             (lexical-let ((cp component))
+              (ctbl:async-state-on-update cp)
               (ctbl:render-async-main
                dest
                (ctbl:component-model component)
@@ -1298,12 +1304,19 @@ panel-end      : end mark object for status panel
   status actual-width column-widths column-formats
   next-index panel-begin panel-end)
 
+(defun ctbl:async-state-on-update (component)
+  "[internal] Reset async data model."
+  (let* ((cp component)
+         (amodel (ctbl:model-data (ctbl:cp-get-model cp)))
+         (astate (ctbl:cp-states-get cp 'async-state)))
+    (when (and astate (ctbl:async-model-reset amodel))
+      (funcall (ctbl:async-model-reset amodel)))))
+
 (defun ctbl:async-state-on-click-panel (component)
-  "[internal] "
-  (lexical-let*
-      ((cp component)
-       (amodel (ctbl:model-data (ctbl:cp-get-model cp)))
-       (astate (ctbl:cp-states-get cp 'async-state)))
+  "[internal] This function is called when the user clicks the status panel."
+  (let* ((cp component)
+         (amodel (ctbl:model-data (ctbl:cp-get-model cp)))
+         (astate (ctbl:cp-states-get cp 'async-state)))
     (when cp
       (case (ctbl:async-state-status astate)
         ('normal
@@ -1317,11 +1330,10 @@ panel-end      : end mark object for status panel
 
 (defun ctbl:async-state-update-status (component next-status)
   "[internal] Update internal status of async-state and update the status panel."
-  (let*
-      ((cp component)
-       (dest (ctbl:component-dest cp))
-       (amodel (ctbl:model-data (ctbl:cp-get-model cp)))
-       (astate (ctbl:cp-states-get cp 'async-state)))
+  (let* ((cp component)
+         (dest (ctbl:component-dest cp))
+         (amodel (ctbl:model-data (ctbl:cp-get-model cp)))
+         (astate (ctbl:cp-states-get cp 'async-state)))
     (with-current-buffer (ctbl:dest-buffer dest)
       (setf (ctbl:async-state-status astate) next-status)
       (ctbl:async-state-update-status-panel dest astate amodel))))
