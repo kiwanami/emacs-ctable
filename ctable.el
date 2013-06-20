@@ -1328,6 +1328,7 @@ This function assumes that the current buffer is the destination buffer."
            (setq column-formats (ctbl:render-get-formats cmodels column-widths))
            (ctbl:render-main-header dest model param cmodels column-widths)
            (ctbl:render-main-content dest model param cmodels drows column-widths column-formats)
+           (add-hook 'post-command-hook 'ctbl:post-command-hook-for-auto-request t t)
            (let (mark-panel-begin mark-panel-end astate)
              (setq mark-panel-begin (point-marker))
              (insert "\n")
@@ -1341,8 +1342,9 @@ This function assumes that the current buffer is the destination buffer."
                     :next-index (length rows)
                     :panel-begin mark-panel-begin :panel-end mark-panel-end))
              (ctbl:render-async-panel dest astate amodel)
-             (funcall rows-setter rows astate)))))
-     (lambda (errsym)
+             (funcall rows-setter rows astate))
+           (goto-char (ctbl:dest-point-min dest)))))
+     (lambda (errsym) ; >> request failed
        (message "ctable : error -> %S" errsym)))))
 
 (defun ctbl:render-async-panel (dest astate amodel)
@@ -1350,30 +1352,31 @@ This function assumes that the current buffer is the destination buffer."
   (let ((begin (ctbl:async-state-panel-begin astate))
         (end (ctbl:async-state-panel-end astate))
         (width (ctbl:async-state-actual-width astate)))
-    (let (buffer-read-only)
-      (when (< 2 (- end begin))
-        (delete-region begin (1- end)))
-      (goto-char begin)
-      (insert
-       (propertize
-        (case (ctbl:async-state-status astate)
-          ('done
-           (ctbl:format-center width "No more data."))
-          ('requested
-           (cond
-            ((ctbl:async-model-cancel amodel)
-             (ctbl:format-center width "(Waiting for data. [Click to Cancel])"))
+    (save-excursion
+      (let (buffer-read-only)
+        (when (< 2 (- end begin))
+          (delete-region begin (1- end)))
+        (goto-char begin)
+        (insert
+         (propertize
+          (case (ctbl:async-state-status astate)
+            ('done
+             (ctbl:format-center width "No more data."))
+            ('requested
+             (cond
+              ((ctbl:async-model-cancel amodel)
+               (ctbl:format-center width "(Waiting for data. [Click to Cancel])"))
+              (t
+               (ctbl:format-center width "(Waiting for data...)"))))
+            ('normal
+             (ctbl:format-center width "[Click to retrieve more data.]"))
             (t
-             (ctbl:format-center width "(Waiting for data...)"))))
-          ('normal
-           (ctbl:format-center width "[Click to retrieve more data.]"))
-          (t
-           (ctbl:format-center
-            width (format "(Error : %s)" (ctbl:async-state-status astate)))))
-        'keymap ctbl:continue-button-keymap
-        'face 'ctbl:face-continue-bar
-        'mouse-face 'highlight)
-       "\n"))))
+             (ctbl:format-center
+              width (format "(Error : %s)" (ctbl:async-state-status astate)))))
+          'keymap ctbl:continue-button-keymap
+          'face 'ctbl:face-continue-bar
+          'mouse-face 'highlight)
+         "\n")))))
 
 (defun ctbl:action-continue-async-clicked ()
   "Action for clicking the continue button."
@@ -1410,29 +1413,30 @@ This function assumes that the current buffer is the destination buffer."
          begin-index (ctbl:async-model-more-num amodel)
          (lambda (rows) ; >> request succeeded
            (with-current-buffer buf
-             (let (buffer-read-only)
-               (cond
-                ((null rows)
-                 ;; no more data
-                 (setf (ctbl:async-state-status astate) 'done))
-                (t
-                 ;; continue data
-                 (goto-char (1- (marker-position (ctbl:async-state-panel-begin astate))))
-                 (insert "\n")
-                 (ctbl:render-main-content
-                  dest model (ctbl:cp-get-param cp) (ctbl:model-column-model model)
-                  rows (ctbl:async-state-column-widths astate)
-                  (ctbl:async-state-column-formats astate) begin-index)
-                 (setf (ctbl:async-state-status astate) 'normal)
-                 (delete-backward-char 1)))
-               ;; status update
-               (ctbl:render-async-panel dest astate amodel)
-               ;; append row data (side effect!)
-               (setf (ctbl:component-sorted-data cp)
-                     (append (ctbl:component-sorted-data cp) rows))
-               (setf (ctbl:async-state-next-index astate)
-                     (+ (length rows) begin-index)))))
-         (lambda (errsym)
+             (save-excursion
+               (let (buffer-read-only)
+                 (cond
+                  ((null rows)
+                   ;; no more data
+                   (setf (ctbl:async-state-status astate) 'done))
+                  (t
+                   ;; continue data
+                   (goto-char (1- (marker-position (ctbl:async-state-panel-begin astate))))
+                   (insert "\n")
+                   (ctbl:render-main-content
+                    dest model (ctbl:cp-get-param cp) (ctbl:model-column-model model)
+                    rows (ctbl:async-state-column-widths astate)
+                    (ctbl:async-state-column-formats astate) begin-index)
+                   (setf (ctbl:async-state-status astate) 'normal)
+                   (delete-backward-char 1)))
+                 ;; status update
+                 (ctbl:render-async-panel dest astate amodel)
+                 ;; append row data (side effect!)
+                 (setf (ctbl:component-sorted-data cp)
+                       (append (ctbl:component-sorted-data cp) rows))
+                 (setf (ctbl:async-state-next-index astate)
+                       (+ (length rows) begin-index))))))
+         (lambda (errsym) ; >> request failed
            (with-current-buffer buf
              (setf (ctbl:async-state-status astate) errsym)
              (ctbl:render-async-panel dest astate amodel)
@@ -1442,6 +1446,19 @@ This function assumes that the current buffer is the destination buffer."
          (setf (ctbl:async-state-status astate) (cadr err))
          (ctbl:render-async-panel dest astate amodel)
          (message "ctable : error -> %S" err))))))
+
+(defun ctbl:post-command-hook-for-auto-request ()
+  "[internal] This hook watches the buffer position of displayed window
+to urge async data model to request next data chunk."
+  (let ((win (selected-window))
+        (cp (ctbl:cp-get-component)))
+    (when (and cp (not (window-minibuffer-p win)))
+      (let* ((astate (ctbl:cp-states-get cp 'async-state))
+             (panel-begin-pos (marker-position
+                               (ctbl:async-state-panel-begin astate))))
+        (when (and (eq 'normal (ctbl:async-state-status astate))
+                   (< panel-begin-pos (window-end win)))
+          (ctbl:action-continue-async-clicked))))))
 
 
 ;; tooltip
