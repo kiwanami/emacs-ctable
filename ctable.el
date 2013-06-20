@@ -1154,7 +1154,7 @@ surplus width."
 (defun ctbl:dest-width-get (dest)
   "[internal] Return the column number to draw the table view.
 Return nil, if the width is not given. Then, the renderer draws freely."
-  (let ((dwidth (ctbl:dest-width dest)) ; dwidth must not be nil
+  (let ((dwidth (ctbl:dest-width dest))
         (dwin (get-buffer-window)))
     (cond
      ((numberp dwidth) dwidth)
@@ -1164,7 +1164,7 @@ Return nil, if the width is not given. Then, the renderer draws freely."
 (defun ctbl:dest-height-get (dest)
   "[internal] Return the row number to draw the table view.
 Return nil, if the height is not given. Then, the renderer draws freely."
-  (let ((dheight (ctbl:dest-height dest)) ; dheight must not be nil
+  (let ((dheight (ctbl:dest-height dest))
         (dwin (get-buffer-window)))
     (cond
      ((numberp dheight) dheight)
@@ -1305,7 +1305,7 @@ This function assumes that the current buffer is the destination buffer."
     (funcall
      (ctbl:async-model-request amodel)
      0 (ctbl:async-model-init-num amodel)
-     (lambda (rows)
+     (lambda (rows) ; >> request succeeded
        (with-current-buffer buf
          (let
              (buffer-read-only
@@ -1384,13 +1384,13 @@ This function assumes that the current buffer is the destination buffer."
        (astate (ctbl:cp-states-get cp 'async-state)))
     (when cp
       (case (ctbl:async-state-status astate)
-        ('normal 
+        ('normal
          (ctbl:render-async-continue cp))
         ('requested
          (when (ctbl:async-model-cancel amodel)
            (funcall (ctbl:async-model-cancel amodel))
            (setf (ctbl:async-state-status astate) 'normal)
-           (ctbl:render-async-panel 
+           (ctbl:render-async-panel
             (ctbl:component-dest cp) astate amodel)))))))
 
 (defun ctbl:render-async-continue (component)
@@ -1408,7 +1408,7 @@ This function assumes that the current buffer is the destination buffer."
         (funcall ; request async data
          (ctbl:async-model-request amodel)
          begin-index (ctbl:async-model-more-num amodel)
-         (lambda (rows)
+         (lambda (rows) ; >> request succeeded
            (with-current-buffer buf
              (let (buffer-read-only)
                (cond
@@ -1437,7 +1437,7 @@ This function assumes that the current buffer is the destination buffer."
              (setf (ctbl:async-state-status astate) errsym)
              (ctbl:render-async-panel dest astate amodel)
              (message "ctable : error -> %S" errsym))))
-      (error
+      (error ; >> request synchronously failed
        (with-current-buffer buf
          (setf (ctbl:async-state-status astate) (cadr err))
          (ctbl:render-async-panel dest astate amodel)
