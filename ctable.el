@@ -551,9 +551,9 @@ HOOK is a function that has no argument."
         (ctbl:dest-with-region dest
           (ctbl:dest-clear dest)
           (cond
+           ;; asynchronous model
            ((ctbl:async-model-p
              (ctbl:model-data (ctbl:component-model component)))
-            ;; asynchronous model
             (lexical-let ((cp component))
               (ctbl:render-async-main
                dest
@@ -563,8 +563,8 @@ HOOK is a function that has no argument."
                  (setf (ctbl:component-sorted-data cp) rows)
                  (when astate
                    (ctbl:cp-states-set cp 'async-state astate))))))
+           ;; synchronous model
            (t
-            ;; synchronous model
             (setf (ctbl:component-sorted-data component)
                   (ctbl:render-main
                    dest
@@ -1268,7 +1268,8 @@ This function assumes that the current buffer is the destination buffer."
     (insert
       (ctbl:render-make-hline column-widths model param -1))))
 
-;; rendering async data model
+
+;; async data model
 
 (defvar ctbl:continue-button-keymap
   (ctbl:define-keymap
@@ -1277,6 +1278,8 @@ This function assumes that the current buffer is the destination buffer."
      ("RET" . ctbl:action-continue-async-clicked)
      ))
   "Keymap for the continue button.")
+
+;; async data / internal state
 
 (defstruct ctbl:async-state
   "Rendering State [internal]
@@ -1294,6 +1297,76 @@ panel-end      : end mark object for status panel
 "
   status actual-width column-widths column-formats
   next-index panel-begin panel-end)
+
+(defun ctbl:async-state-on-click-panel (component)
+  "[internal] "
+  (lexical-let*
+      ((cp component)
+       (amodel (ctbl:model-data (ctbl:cp-get-model cp)))
+       (astate (ctbl:cp-states-get cp 'async-state)))
+    (when cp
+      (case (ctbl:async-state-status astate)
+        ('normal
+         (ctbl:render-async-continue cp))
+        ('requested
+         (when (ctbl:async-model-cancel amodel)
+           (funcall (ctbl:async-model-cancel amodel))
+           (setf (ctbl:async-state-status astate) 'normal)
+           (ctbl:render-async-panel
+            (ctbl:component-dest cp) astate amodel)))))))
+
+(defun ctbl:async-state-update-status (component next-status)
+  "[internal] Update internal status of async-state and update the status panel."
+  (let*
+      ((cp component)
+       (dest (ctbl:component-dest cp))
+       (amodel (ctbl:model-data (ctbl:cp-get-model cp)))
+       (astate (ctbl:cp-states-get cp 'async-state)))
+    (with-current-buffer (ctbl:dest-buffer dest)
+      (setf (ctbl:async-state-status astate) next-status)
+      (ctbl:async-state-update-status-panel dest astate amodel))))
+
+(defun ctbl:async-state-update-status-panel (dest astate amodel)
+  "[internal] Rendering data model status panel with current state."
+  (let ((begin (ctbl:async-state-panel-begin astate))
+        (end (ctbl:async-state-panel-end astate))
+        (width (ctbl:async-state-actual-width astate)))
+    (save-excursion
+      (let (buffer-read-only)
+        (when (< 2 (- end begin))
+          (delete-region begin (1- end)))
+        (goto-char begin)
+        (insert
+         (propertize
+          (case (ctbl:async-state-status astate)
+            ('done
+             (ctbl:format-center width "No more data."))
+            ('requested
+             (cond
+              ((ctbl:async-model-cancel amodel)
+               (ctbl:format-center width "(Waiting for data. [Click to Cancel])"))
+              (t
+               (ctbl:format-center width "(Waiting for data...)"))))
+            ('normal
+             (ctbl:format-center width "[Click to retrieve more data.]"))
+            (t
+             (ctbl:format-center
+              width (format "(Error : %s)" (ctbl:async-state-status astate)))))
+          'keymap ctbl:continue-button-keymap
+          'face 'ctbl:face-continue-bar
+          'mouse-face 'highlight)
+         "\n")))))
+
+(defun ctbl:async-state-on-post-command-hook (component)
+  "[internal] Try auto requesting for asynchronous data."
+  (let* ((astate (ctbl:cp-states-get component 'async-state))
+         (panel-begin-pos (marker-position
+                           (ctbl:async-state-panel-begin astate))))
+    (when (and (eq 'normal (ctbl:async-state-status astate))
+               (< panel-begin-pos (window-end)))
+      (ctbl:action-continue-async-clicked))))
+
+;; rendering async data
 
 (defun ctbl:render-async-main (dest model param rows-setter)
   "[internal] Rendering the table view for async data model.
@@ -1347,55 +1420,6 @@ This function assumes that the current buffer is the destination buffer."
      (lambda (errsym) ; >> request failed
        (message "ctable : error -> %S" errsym)))))
 
-(defun ctbl:render-async-panel (dest astate amodel)
-  "[internal] Rendering data model status panel with current state."
-  (let ((begin (ctbl:async-state-panel-begin astate))
-        (end (ctbl:async-state-panel-end astate))
-        (width (ctbl:async-state-actual-width astate)))
-    (save-excursion
-      (let (buffer-read-only)
-        (when (< 2 (- end begin))
-          (delete-region begin (1- end)))
-        (goto-char begin)
-        (insert
-         (propertize
-          (case (ctbl:async-state-status astate)
-            ('done
-             (ctbl:format-center width "No more data."))
-            ('requested
-             (cond
-              ((ctbl:async-model-cancel amodel)
-               (ctbl:format-center width "(Waiting for data. [Click to Cancel])"))
-              (t
-               (ctbl:format-center width "(Waiting for data...)"))))
-            ('normal
-             (ctbl:format-center width "[Click to retrieve more data.]"))
-            (t
-             (ctbl:format-center
-              width (format "(Error : %s)" (ctbl:async-state-status astate)))))
-          'keymap ctbl:continue-button-keymap
-          'face 'ctbl:face-continue-bar
-          'mouse-face 'highlight)
-         "\n")))))
-
-(defun ctbl:action-continue-async-clicked ()
-  "Action for clicking the continue button."
-  (interactive)
-  (lexical-let*
-      ((cp (ctbl:cp-get-component))
-       (amodel (ctbl:model-data (ctbl:cp-get-model cp)))
-       (astate (ctbl:cp-states-get cp 'async-state)))
-    (when cp
-      (case (ctbl:async-state-status astate)
-        ('normal
-         (ctbl:render-async-continue cp))
-        ('requested
-         (when (ctbl:async-model-cancel amodel)
-           (funcall (ctbl:async-model-cancel amodel))
-           (setf (ctbl:async-state-status astate) 'normal)
-           (ctbl:render-async-panel
-            (ctbl:component-dest cp) astate amodel)))))))
-
 (defun ctbl:render-async-continue (component)
   "[internal] Rendering subsequent data asynchronously."
   (lexical-let*
@@ -1405,8 +1429,7 @@ This function assumes that the current buffer is the destination buffer."
        (astate (ctbl:cp-states-get cp 'async-state))
        (begin-index (ctbl:async-state-next-index astate)))
     ;; status update
-    (setf (ctbl:async-state-status astate) 'requested)
-    (ctbl:render-async-panel dest astate amodel)
+    (ctbl:async-state-update-status cp 'requested)
     (condition-case err
         (funcall ; request async data
          (ctbl:async-model-request amodel)
@@ -1418,7 +1441,7 @@ This function assumes that the current buffer is the destination buffer."
                  (cond
                   ((null rows)
                    ;; no more data
-                   (setf (ctbl:async-state-status astate) 'done))
+                   (ctbl:async-state-update-status cp 'done))
                   (t
                    ;; continue data
                    (goto-char (1- (marker-position (ctbl:async-state-panel-begin astate))))
@@ -1427,38 +1450,34 @@ This function assumes that the current buffer is the destination buffer."
                     dest model (ctbl:cp-get-param cp) (ctbl:model-column-model model)
                     rows (ctbl:async-state-column-widths astate)
                     (ctbl:async-state-column-formats astate) begin-index)
-                   (setf (ctbl:async-state-status astate) 'normal)
-                   (delete-backward-char 1)))
-                 ;; status update
-                 (ctbl:render-async-panel dest astate amodel)
-                 ;; append row data (side effect!)
-                 (setf (ctbl:component-sorted-data cp)
-                       (append (ctbl:component-sorted-data cp) rows))
-                 (setf (ctbl:async-state-next-index astate)
-                       (+ (length rows) begin-index))))))
+                   (delete-backward-char 1)
+                   (ctbl:async-state-update-status cp 'normal)
+                   ;; append row data (side effect!)
+                   (setf (ctbl:component-sorted-data cp)
+                         (append (ctbl:component-sorted-data cp) rows))
+                   (setf (ctbl:async-state-next-index astate)
+                         (+ (length rows) begin-index))))))))
          (lambda (errsym) ; >> request failed
-           (with-current-buffer buf
-             (setf (ctbl:async-state-status astate) errsym)
-             (ctbl:render-async-panel dest astate amodel)
-             (message "ctable : error -> %S" errsym))))
+           (ctbl:async-state-update-status cp errsym)))
       (error ; >> request synchronously failed
-       (with-current-buffer buf
-         (setf (ctbl:async-state-status astate) (cadr err))
-         (ctbl:render-async-panel dest astate amodel)
-         (message "ctable : error -> %S" err))))))
+       (ctbl:async-state-update-status cp (cadr err))
+       (message "ctable : error -> %S" err)))))
+
+;; async data actions
+
+(defun ctbl:action-continue-async-clicked ()
+  "Action for clicking the continue button."
+  (interactive)
+  (let ((cp (ctbl:cp-get-component)))
+    (when cp
+      (ctbl:async-state-on-click-panel cp))))
 
 (defun ctbl:post-command-hook-for-auto-request ()
   "[internal] This hook watches the buffer position of displayed window
 to urge async data model to request next data chunk."
-  (let ((win (selected-window))
-        (cp (ctbl:cp-get-component)))
-    (when (and cp (not (window-minibuffer-p win)))
-      (let* ((astate (ctbl:cp-states-get cp 'async-state))
-             (panel-begin-pos (marker-position
-                               (ctbl:async-state-panel-begin astate))))
-        (when (and (eq 'normal (ctbl:async-state-status astate))
-                   (< panel-begin-pos (window-end win)))
-          (ctbl:action-continue-async-clicked))))))
+  (let ((cp (ctbl:cp-get-component)))
+    (when (and cp (not (window-minibuffer-p)))
+      (ctbl:async-state-on-post-command-hook cp))))
 
 
 ;; tooltip
