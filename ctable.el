@@ -1491,6 +1491,33 @@ to urge async data model to request next data chunk."
     (when (and cp (not (window-minibuffer-p)))
       (ctbl:async-state-on-post-command-hook cp))))
 
+(defun ctbl:async-model-wrapper (rows)
+  "This function wraps a list of row data in an asynchronous data
+model so as to avoid Emacs freezing with a large number of rows."
+  (lexical-let ((rows rows) (rest-rows rows))
+    (make-ctbl:async-model
+     :request
+     (lambda (row-num len responsef errorf)
+       (funcall 
+        responsef
+        (cond
+         ((null rest-rows) nil)
+         (t
+          (nreverse
+           (loop with pos = rest-rows
+                 with ret = nil
+                 for i from 0 below len
+                 do
+                 (push (car pos) ret)
+                 (setq pos (cdr pos))
+                 (unless pos (return ret))
+                 finally return ret)))))
+       (when rest-rows
+         (setq rest-rows (nthcdr len rest-rows))))
+     :reset
+     (lambda () (setq rest-rows rows))
+     :init-num 100 :more-num 100)))
+
 
 ;; tooltip
 
