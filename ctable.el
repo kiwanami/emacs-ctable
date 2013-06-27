@@ -231,10 +231,12 @@ If the text already has some keymap property, the text is skipped."
     (ctbl:model-sort-state model)))
 
 (defun ctbl:cmodel-sort-action (cp col-index)
-  "Sorting action for click on the column headers"
+  "Sorting action for click on the column headers.
+If data is an instance of `ctbl:async-model', this function do nothing."
   (let* ((model (ctbl:cp-get-model cp)))
-    (ctbl:model-modify-sort-key model col-index)
-    (ctbl:cp-update cp)))
+    (unless (ctbl:async-model-p (ctbl:model-data model))
+      (ctbl:model-modify-sort-key model col-index)
+      (ctbl:cp-update cp))))
 
 
 ;;; ctable framework
@@ -1324,9 +1326,7 @@ panel-end      : end mark object for status panel
         ('requested
          (when (ctbl:async-model-cancel amodel)
            (funcall (ctbl:async-model-cancel amodel))
-           (setf (ctbl:async-state-status astate) 'normal)
-           (ctbl:render-async-panel
-            (ctbl:component-dest cp) astate amodel)))))))
+           (ctbl:async-state-update-status (ctbl:component-dest cp) 'normal)))))))
 
 (defun ctbl:async-state-update-status (component next-status)
   "[internal] Update internal status of async-state and update the status panel."
@@ -1426,7 +1426,7 @@ This function assumes that the current buffer is the destination buffer."
                     :column-widths column-widths :column-formats column-formats
                     :next-index (length rows)
                     :panel-begin mark-panel-begin :panel-end mark-panel-end))
-             (ctbl:render-async-panel dest astate amodel)
+             (ctbl:async-state-update-status-panel dest astate amodel)
              (funcall rows-setter rows astate))
            (goto-char (ctbl:dest-point-min dest)))))
      (lambda (errsym) ; >> request failed
