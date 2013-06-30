@@ -68,7 +68,10 @@ request  : Data request function which receives 4 arguments (begin-num length fn
 init-num : Initial row number. (Default 20)
 more-num : Increase row number. (Default 20)
 reset    : Reset function which is called when user executes update command. (Can be nil)
-cancel   : Cancel function of data requesting. (Can be nil)"
+cancel   : Cancel function of data requesting. (Can be nil)
+
+For forward compatibility, these callback functions should have a `&rest' keyword at the end of argument list.
+"
   request init-num more-num reset cancel)
 
 
