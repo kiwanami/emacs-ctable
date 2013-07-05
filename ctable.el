@@ -37,6 +37,7 @@
 
 ;; Table data which are shown in the table view, are collected
 ;; by the `ctbl:model' objects. See the function `ctbl:demo' for example.
+;; See the README document for the details.
 
 ;;; Code:
 
@@ -1494,10 +1495,12 @@ to urge async data model to request next data chunk."
     (when (and cp (not (window-minibuffer-p)))
       (ctbl:async-state-on-post-command-hook cp))))
 
-(defun ctbl:async-model-wrapper (rows)
+(defun ctbl:async-model-wrapper (rows &rest init-num more-num)
   "This function wraps a list of row data in an asynchronous data
 model so as to avoid Emacs freezing with a large number of rows."
-  (lexical-let ((rows rows) (rest-rows rows))
+  (lexical-let ((rows rows) (rest-rows rows)
+                (init-num (or init-num 100))
+                (more-num (or more-num 100)))
     (make-ctbl:async-model
      :request
      (lambda (row-num len responsef errorf)
@@ -1519,7 +1522,7 @@ model so as to avoid Emacs freezing with a large number of rows."
          (setq rest-rows (nthcdr len rest-rows))))
      :reset
      (lambda () (setq rest-rows rows))
-     :init-num 100 :more-num 100)))
+     :init-num init-num :more-num more-num)))
 
 
 ;; tooltip
@@ -1729,6 +1732,12 @@ CUSTOM-MAP is the additional keymap that is added to default keymap `ctbl:table-
 
 (defun ctbl:create-table-buffer-easy (rows &optional header-row)
   "Return a table buffer from a list of rows."
+  (ctbl:cp-get-buffer 
+   (ctbl:create-table-component-buffer
+    :model (ctbl:make-model-from-list rows header-row))))
+
+(defun ctbl:make-model-from-list (rows &optional header-row)
+  "Make a `ctbl:model' instance from a list of rows."
   (let* ((col-num (or (and header-row (length header-row))
                       (and (car rows) (length (car rows)))))
          (column-models
@@ -1737,13 +1746,9 @@ CUSTOM-MAP is the additional keymap that is added to default keymap `ctbl:table-
                     collect (make-ctbl:cmodel :title (format "%s" i) :min-width 5))
             (loop for i from 0 below col-num
                   for ch = (char-to-string (+ ?A i))
-                  collect (make-ctbl:cmodel :title ch :min-width 5))))
-         (model
-          (make-ctbl:model
-           :column-model column-models :data rows))
-         (cp (ctbl:create-table-component-buffer
-              :model model)))
-    (ctbl:cp-get-buffer cp)))
+                  collect (make-ctbl:cmodel :title ch :min-width 5)))))
+    (make-ctbl:model
+     :column-model column-models :data rows)))
 
 ;; region
 
