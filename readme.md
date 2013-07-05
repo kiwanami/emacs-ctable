@@ -100,6 +100,16 @@ The appearance of the table can be customized, such as foreground and background
 
 ![ctable components](img/objects.png)
 
+## Sample Codes
+
+- samples/simple.el
+    - sample codes mentioned above.
+- samples/large-table.el
+    - large data and async-model samples.
+- samples/direx-ctable.el
+    - directory tree and table list in collaboration with direx.el
+    - ref: https://github.com/m2ym/direx-el
+
 
 # Advanced Topics
 
@@ -171,7 +181,9 @@ Some component access functions are useful for the action handlers.
 
 The ctable view renders the tabular form with many rendering parameters. The parameters are set at the slot members of the cl-defstruct `ctbl:param`.
 
-To customize the parameters, one should copy the default parameters like `(copy-ctbl:param ctbl:default-rendering-param)` and set parameters with setter functions. Here is a sample code for parameter customize.
+To customize the parameters, one should copy the default parameters like `(copy-ctbl:param ctbl:default-rendering-param)` and set parameters with setter functions. Then, at the building ctable component instance, this parameter object is given by the `:param` keyword.
+
+Here is a sample code for parameter customize.
 
 ```lisp
   (let ((param (copy-ctbl:param ctbl:default-rendering-param)))
@@ -187,6 +199,9 @@ To customize the parameters, one should copy the default parameters like `(copy-
             (cond ((string-match "CoCo" str) "LightPink")
                   ((= 0 (% (1- row-index) 2)) "Darkseagreen1")
                   (t nil))))
+    ...
+    (setq cp (ctbl:create-table-component-buffer
+              :model model :param param))
     ...
     )
 ```
@@ -216,11 +231,154 @@ Here is the details of the slot members of `ctbl:param`.
 
 ## View Components
 
-todo...
+Ctable has three destination components to display the tabular data.
 
-## Package Installation
+- Independent buffer
+- Region in the other buffer
+- Text output
 
-todo...
+### Buffer
+
+The 'buffer' destination displays the tabular view as ordinary Emacs applications do.
+
+The function `ctbl:open-table-buffer` makes a new ctable buffer and displays it by `switch-to-buffer`. The major mode of the ctable buffer is `ctbl:table-mode` and the keymap `ctbl:table-mode-map` is bound.
+
+Using this destination with the `fixed-header` parameter, the application can use the fixed column header.
+
+This destination is easy to use for applications and users, because the buffer is usual application boundary and users know how to use buffers.
+
+### Region
+
+The 'Region' destination embeds the tabular view in the buffer which is managed by the other applications. This destination can give the other applications a nice tabular view.
+
+Let's try a simple demonstration. Evaluate this code in your scratch buffer.
+
+Region destination example:
+
+    ;; Evaluate this code in the scratch buffer
+    (require 'ctable)
+    (ctbl:create-table-component-region
+      :model (ctbl:make-model-from-list
+               '((1 2 3 4) (5 6 7 8) (9 10 11 12))))
+
+Then, the tabular view will be embedded in the scratch buffer. You can navigate the ctable view in the buffer. Undoing for the some times, you can remove the ctable view.
+
+Because this destination never interacts anything out of the region and has its own key-binds as a text property, users can easily embed a tabular view in the other applications.
+
+### Text
+
+The 'text' destination generates just a text which represent ctable view. The function `ctbl:get-table-text` returns the text.
+
+### Column Width
+
+TODO...
+
+- Unlimited mode
+- Limited mode
+    - expand strategy
+    - shrink strategy
+
+## ctable Component
+
+An instance of struct `ctbl:component` manages all ctable states, such as models, view, event handlers and some internal status. If an application wants to interact a ctable component, the application should hold the instance and access the component through the following ctable component interface.
+
+### Getting ctbl:component Instance
+
+To access ctable component, the application program should bring an instance of `ctbl:component`.
+
+The instance of the ctable component is stored at following places:
+
+- `buffer` view: the buffer-local variable `ctbl:component`
+- `region` view: the text property `ctbl:component`
+- `text`   view: N/A
+
+Calling the utility function `ctbl:cp-get-component`, one can obtain the ctable instance at the appropriate places. The stateless functions, such as simple event handler functions, can use this function to get the instance.
+
+The applications those have the state-full operations, however, should hold their own ctable instance for the safety object reference.
+
+### Access Internal Objects
+
+The application can get some internal objects.
+
+- model object : `ctbl:cp-get-model`
+- parameter object : `ctbl:cp-get-param`
+- buffer object : `ctbl:cp-get-buffer`
+
+### Cursor Position
+
+The application can get the current cursor position and modify the position.
+
+Here, *cell-id* is an object that represents the physical cursor position. *cell-id* is a cons pair which consists of positive integers: `(row . column)`. The index number begins from zero. One can access the values with `car` and `cdr` directly.
+
+- getting cell-id : `ctbl:cp-get-selected`
+- moving cursor to cell-id : `ctbl:cp-set-selected-cell`
+
+Note that the position which is indicated by *cell-id* is not the same as the position of the model's row. Because the ctable component changes the row order with sorting by clicking header column, the rows order is not corresponding to the model's ones.
+
+If the application need to get the selected row's data, following functions are available:
+
+- current row data  : `ctbl:cp-get-selected-data-row`
+- current cell data : `ctbl:cp-get-selected-data-cell`
+
+### Modifying Model and Update Table View
+
+The application can update the table contents.
+
+Creating a new model instance and setting it to the component with `ctbl:cp-set-model`, the component replaces the model and refresh the buffer.
+
+- replace model instance and update view : `ctbl:cp-set-model`
+
+Another way is updating model instance destructively and refresh the buffer with `ctbl:cp-update`. If the modification of model data is little, this way is lightweight in the viewpoint of calculation and memory usage. However, such the destructive modification complicates the application logic.
+
+- update view with current model state : `ctbl:cp-update`
+
+## Async-Model and Incremental Update
+
+Ctable has incremental data interface which enables the application delay rendering or append subsequent data with the user action. This mechanism can avoid Emacs freezing during visualizing a large amount of data.
+
+### Case 1: Huge data
+
+When a model which consists of a large number of rows (more than ~1000) is given to the synchronous interface mentioned above, Emacs blocks UI response until rendering is completed. Because the text rendering on the buffer is the heaviest task in ctable, it is effective that the application displays a front part of data and delays the rendering of rest data. In the most cases, users are interesting in the such first page of the large data.
+
+Just wrapping data in async-model via `ctbl:async-model-wrapper`, the application can use this interface.
+
+Here is a sample code:
+
+```lisp
+  (let* ((large-data ; large data : 4000 rows
+          (loop with lim = 4000
+                for i from 0 upto lim
+                for d = (/ (random 1000) 1000.0)
+                collect 
+                (list i d (exp (- (/ i 1.0 lim))) (exp (* (- (/ i 1.0 lim)) d)))))
+         (async-model ; wrapping a large data in async-data-model
+          (ctbl:async-model-wrapper large-data))
+         (cp ; just build a component 
+          (ctbl:create-table-component-buffer
+           :model
+           (make-ctbl:model
+            :column-model
+            (list (make-ctbl:cmodel :title "row")
+                  (make-ctbl:cmodel :title "delta")
+                  (make-ctbl:cmodel :title "exp")
+                  (make-ctbl:cmodel :title "exp-delta"))
+            :data async-model))))
+    (pop-to-buffer (ctbl:cp-get-buffer cp)))
+```
+
+### Case 2: Asynchronous retrieving
+
+TODO...
+
+- struct definition
+- function details
+- sample code
+
+### Sorting Async-Model
+
+The ctable framework doesn't support default sorting function `ctbl:cmodel-sort-action` for the async-model data, because ctable can not receive whole rows of async-model.
+
+If sorting function is needed, the application program must implement it manually.
 
 * * * * *
 
