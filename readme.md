@@ -208,7 +208,7 @@ Here is a sample code for parameter customize.
 
 Here is the details of the slot members of `ctbl:param`.
 
-|slot | name description |
+|slot name | description |
 |-----|------------------|
 |display-header | if t, display the header row with column models. |
 |fixed-header   | if t, display the header row in the header-line area. |
@@ -262,6 +262,8 @@ Region destination example:
                '((1 2 3 4) (5 6 7 8) (9 10 11 12))))
 
 Then, the tabular view will be embedded in the scratch buffer. You can navigate the ctable view in the buffer. Undoing for the some times, you can remove the ctable view.
+
+![ctable in scratch buffer](img/region-scratch.png)
 
 Because this destination never interacts anything out of the region and has its own key-binds as a text property, users can easily embed a tabular view in the other applications.
 
@@ -336,7 +338,7 @@ Another way is updating model instance destructively and refresh the buffer with
 
 Ctable has incremental data interface which enables the application delay rendering or append subsequent data with the user action. This mechanism can avoid Emacs freezing during visualizing a large amount of data.
 
-### Case 1: Huge data
+### Case 1: Huge Data
 
 When a model which consists of a large number of rows (more than ~1000) is given to the synchronous interface mentioned above, Emacs blocks UI response until rendering is completed. Because the text rendering on the buffer is the heaviest task in ctable, it is effective that the application displays a front part of data and delays the rendering of rest data. In the most cases, users are interesting in the such first page of the large data.
 
@@ -366,17 +368,60 @@ Here is a sample code:
     (pop-to-buffer (ctbl:cp-get-buffer cp)))
 ```
 
-### Case 2: Asynchronous retrieving
+And here is the result image:
 
-TODO...
+![async data wrapper](img/async-wrapper.png)
 
-- struct definition
-- function details
-- sample code
+
+### Case 2: Asynchronous Retrieving
+
+In the case of retrieving large data asynchronously from an another process or remote servers, the application needs to append retrieved partial data without blocking UI response nor updating whole table view.
+
+Defining some functions in `ctbl:async-model` struct, the application can control asynchronous data retrieving and updating table view.
+
+Here is a minimum sample code:
+
+```lisp
+(defun async-response (row-num len responsef errorf &rest a)
+  (funcall responsef
+           (loop for i from row-num below (+ row-num len)
+                 collect
+                 (list i (* i i) (* i i i) (sqrt i)))))
+ 
+(ctbl:open-table-buffer-easy
+ (make-ctbl:async-model :request 'async-response) ; defining async-model
+ '("int" "square" "cube" "root"))
+```
+
+In this sample code, we defined just a `request` function in `ctbl:async-model`.
+The `request` function should have 4 arguments:
+
+- `row-num`   : an index number of the requested first row
+- `len`       : a number of requested rows
+- `responsef` : the continuation function to which the result rows should be passed
+- `errorf`    : the error continuation function
+
+Here is the result image:
+
+![defining async model:1](img/async-model-sample1.png)
+
+#### ctbl:async-model struct
+
+|slot name | description |
+|-----|------------------|
+|request  | Data request function mentioned above. |
+|init-num | Initial row number. (Default 20)  |
+|more-num | Increase row number. (Default 20) |
+|reset    | Reset function which is called when user executes update command. (Can be nil) |
+|cancel   | Cancel function of data requesting. (Can be nil) |
+
+For forward compatibility, these callback functions should have a `&rest' keyword at the end of argument list.
+
+For more complete example, see the demo function `ctbl:async-demo` at `samples/large-table.el`.
 
 ### Sorting Async-Model
 
-The ctable framework doesn't support default sorting function `ctbl:cmodel-sort-action` for the async-model data, because ctable can not receive whole rows of async-model.
+The ctable doesn't provide default sorting function `ctbl:cmodel-sort-action` for the async-model data, because ctable can not receive whole rows of async-model.
 
 If sorting function is needed, the application program must implement it manually.
 
