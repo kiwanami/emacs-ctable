@@ -73,7 +73,7 @@ cancel   : Cancel function of data requesting. (Can be nil)
 
 For forward compatibility, these callback functions should have a `&rest' keyword at the end of argument list.
 "
-  request init-num more-num reset cancel)
+  request (init-num 20) (more-num 20) reset cancel)
 
 
 (defstruct ctbl:cmodel
@@ -1396,14 +1396,13 @@ This function assumes that the current buffer is the destination buffer."
      0 (ctbl:async-model-init-num amodel)
      (lambda (rows) ; >> request succeeded
        (with-current-buffer buf
-         (let
-             (buffer-read-only
+         (let (buffer-read-only drows column-formats
               (column-widths
                (loop for c in cmodels
                      for title = (ctbl:cmodel-title c)
                      collect (max (or (ctbl:cmodel-min-width c) 0)
                                   (or (and title (length title)) 0))))
-              (EOL "\n") drows column-formats)
+              (EOL "\n"))
            ;; check cell widths
            (setq drows (ctbl:render-check-cell-width rows cmodels column-widths))
            ;; adjust cell widths for ctbl:dest width
@@ -1495,7 +1494,7 @@ to urge async data model to request next data chunk."
     (when (and cp (not (window-minibuffer-p)))
       (ctbl:async-state-on-post-command-hook cp))))
 
-(defun ctbl:async-model-wrapper (rows &rest init-num more-num)
+(defun ctbl:async-model-wrapper (rows &optional init-num more-num)
   "This function wraps a list of row data in an asynchronous data
 model so as to avoid Emacs freezing with a large number of rows."
   (lexical-let ((rows rows) (rest-rows rows)
@@ -1503,7 +1502,7 @@ model so as to avoid Emacs freezing with a large number of rows."
                 (more-num (or more-num 100)))
     (make-ctbl:async-model
      :request
-     (lambda (row-num len responsef errorf)
+     (lambda (row-num len responsef errorf &rest)
        (funcall 
         responsef
         (cond
@@ -1521,7 +1520,7 @@ model so as to avoid Emacs freezing with a large number of rows."
        (when rest-rows
          (setq rest-rows (nthcdr len rest-rows))))
      :reset
-     (lambda () (setq rest-rows rows))
+     (lambda (&rest) (setq rest-rows rows))
      :init-num init-num :more-num more-num)))
 
 
