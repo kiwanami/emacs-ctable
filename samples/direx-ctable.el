@@ -51,18 +51,28 @@
    (direx:item-render-icon-part item)
    (direx:item-render-name-part item)))
 
+(defun dxt:make-model-data-sort-prop (row item)
+  "[internal] "
+  (loop with head = (ctbl:format-left 
+                     64 (file-name-directory (direx:file-full-name (direx:item-tree item))))
+        for i in row
+        collect
+        (if (stringp i)
+            (propertize i 'dxt:sorter (message (format "%s%64s" head i))) i)))
+
 (defun dxt:make-model-data (buf)
   "[internal] "
   (loop for i in (dxt:collect-entries buf)
         for itree = (direx:item-tree i)
         for attr = (file-attributes (direx:file-full-name itree))
         collect
-        (list 
-         (dxt:item-render i)
-         (if (direx:item-leaf-p i)
-             (nth 7 attr) "")
-         (format-time-string   "%Y/%m/%d %H:%M:%S" (nth 5 attr))
-         i)))
+        (dxt:make-model-data-sort-prop
+         (list 
+          (dxt:item-render i)
+          (if (direx:item-leaf-p i)
+              (format "%d" (nth 7 attr)) " ")
+          (format-time-string   "%Y/%m/%d %H:%M:%S" (nth 5 attr))
+          i) i)))
 
 (defun dxt:make-model (buf)
   "[internal] "
@@ -70,13 +80,22 @@
    :column-model
    (list
     (make-ctbl:cmodel
-     :title "File" :min-width 10 :align 'left)
+     :title "File" :min-width 10 :align 'left :sorter 'dxt:sort-item-lessp)
     (make-ctbl:cmodel
-     :title "Size" :min-width 6 :align 'right)
+     :title "Size" :min-width 6 :align 'right :sorter 'dxt:sort-item-lessp)
     (make-ctbl:cmodel
-     :title "Last Modified" :align 'left))
+     :title "Last Modified" :align 'left :sorter 'dxt:sort-item-lessp))
    :data
    (dxt:make-model-data buf)))
+
+(defun dxt:sort-item-lessp (i j)
+  "[internal] Direx item comparator."
+  (let ((ii (get-text-property 0 'dxt:sorter i))
+        (jj (get-text-property 0 'dxt:sorter j)))
+    (cond
+     ((string= ii jj) 0)
+     ((string< ii jj) -1)
+     (t 1))))
 
 (defun dxt:node-action (direx-buf cp row)
   "[internal] action handler"
