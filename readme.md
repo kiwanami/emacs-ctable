@@ -110,6 +110,8 @@ The appearance of the table can be customized, such as foreground and background
     - directory tree and table list in collaboration with direx.el
     - ref: https://github.com/m2ym/direx-el
 
+![direx-ctable image](img/direx-ctable.png)
+
 
 # Advanced Topics
 
