@@ -138,11 +138,9 @@ Here is the details of the slot members of `ctbl:model`.
 
 |slot | name description |
 |-----|------------------|
-|data | **[required]** Table data as a list of rows. A row contains a list of columns. |
+|data | **[required]** Table data as a list of rows. A row contains a list of columns. Or, an instance of `ctbl:async-model`. (See the async-model section for details.) |
 |column-model | **[required]** A list of column models. |
 |sort-state | The current sort order as a list of column indexes. The index number of the first column is 1. If the index is negative, the sort order is reversed. |
-
-(In the current implementation, the data slot should be statically defined.)
 
 ## Key Bindings
 
@@ -156,7 +154,7 @@ The ctable framework provides some hooks for the usual event cases. In such case
 
 ## Event Handling
 
-The ctable component provides some hooks for the particular events: clicking, selection changing and updating view. The application program can implement some actions without defining keymaps.
+The ctable provides some hooks for the particular events: clicking, selection changing and updating view. The application program can implement some actions without defining keymaps.
 
 Here is a sample code for the click action:
 
@@ -166,7 +164,7 @@ Here is a sample code for the click action:
         (ctbl:cp-get-selected-data-row cp))))
 ```
 
-where, `cp` is an instance of ctable component. The function `ctbl:cp-add-click-hook` adds the given function as an event handler to the component instance. Here are event handler functions:
+where, `cp` is an instance of `ctbl:component`. The function `ctbl:cp-add-click-hook` adds the given function as an event handler to the component instance. Here are event handler functions:
 
 - `ctbl:cp-add-click-hook` : on click
 - `ctbl:cp-add-selection-change-hook` : on selection change
@@ -181,7 +179,7 @@ Some component access functions are useful for the action handlers.
 
 ## Display Parameter
 
-The ctable view renders the tabular form with many rendering parameters. The parameters are set at the slot members of the cl-defstruct `ctbl:param`.
+The ctable renders tabular form with many rendering parameters. The parameters are set at the slot members of the cl-defstruct `ctbl:param`.
 
 To customize the parameters, one should copy the default parameters like `(copy-ctbl:param ctbl:default-rendering-param)` and set parameters with setter functions. Then, at the building ctable component instance, this parameter object is given by the `:param` keyword.
 
