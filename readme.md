@@ -121,7 +121,7 @@ The struct `ctbl:cmodel` is a data type defined by cl-defstruct. This model defi
 
 Here is the details of the slot members of `ctbl:cmodel`.
 
-|slot | name description |
+|slot name | description |
 |-----|------------------|
 |title | **[required]** column header title string. |
 |sorter | sorting function which transforms a cell value into sort value. It should return -1, 0 and 1. If nil, `ctbl:sort-string-lessp` is used. |
@@ -136,7 +136,7 @@ The struct `ctbl:model` is a data type defined by cl-defstruct. This model defin
 
 Here is the details of the slot members of `ctbl:model`.
 
-|slot | name description |
+|slot name | description |
 |-----|------------------|
 |data | **[required]** Table data as a list of rows. A row contains a list of columns. Or, an instance of `ctbl:async-model`. (See the async-model section for details.) |
 |column-model | **[required]** A list of column models. |
