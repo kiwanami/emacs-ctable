@@ -1502,7 +1502,7 @@ model so as to avoid Emacs freezing with a large number of rows."
                 (more-num (or more-num 100)))
     (make-ctbl:async-model
      :request
-     (lambda (row-num len responsef errorf &rest)
+     (lambda (row-num len responsef errorf &rest ignored)
        (funcall 
         responsef
         (cond
@@ -1520,7 +1520,7 @@ model so as to avoid Emacs freezing with a large number of rows."
        (when rest-rows
          (setq rest-rows (nthcdr len rest-rows))))
      :reset
-     (lambda (&rest) (setq rest-rows rows))
+     (lambda (&rest ignored) (setq rest-rows rows))
      :init-num init-num :more-num more-num)))
 
 
