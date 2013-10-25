@@ -815,6 +815,22 @@ bug), this function may return nil."
       (ctbl:cp-set-selected-cell cp cell-id)
       (ctbl:cp-fire-click-hooks cp))))
 
+(defun ctbl:navi-jump-to-column (column-name)
+  "Jump to a specified column of the current row."
+  (interactive
+   (list (ido-completing-read "Column name: "
+                              (with-current-buffer (buffer-name)
+                                ctbl:header-title-list))))
+  (let* ((cp (ctbl:cp-get-component))
+         (cell-id (ctbl:cursor-to-nearest-cell))
+         (row-id (car cell-id))
+         (model (ctbl:cp-get-model cp))
+         (cols (ctbl:model-column-length model)))
+    (when (and cp cell-id)
+      (ctbl:navi-goto-cell (ctbl:cell-id
+                            row-id
+                            (position column-name ctbl:header-title-list))))))
+
 (defun ctbl:action-update-buffer ()
   "Update action for the latest table model."
   (interactive)
@@ -869,6 +885,8 @@ bug), this function may return nil."
      ("n" . ctbl:navi-move-down)
      ("b" . ctbl:navi-move-left)
      ("f" . ctbl:navi-move-right)
+
+     ("c" . ctbl:navi-jump-to-column)
 
      ("e" . ctbl:navi-move-right-most)
      ("a" . ctbl:navi-move-left-most)
@@ -1231,6 +1249,7 @@ This function assumes that the current buffer is the destination buffer."
                  'local-map (ctbl:render-column-header-keymap i)
                  'mouse-face 'highlight))
           model param)))
+    (set (make-local-variable 'ctbl:header-title-list) (mapcar 'ctbl:cmodel-title cmodels))
     (cond
      ((and (eq 'buffer (ctbl:dest-type dest))
            (ctbl:param-fixed-header param))
