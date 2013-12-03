@@ -222,7 +222,7 @@ If the text already has some keymap property, the text is skipped."
 
 (defun ctbl:model-column-length (model)
   "[internal] Return the column number."
-  (length (car (ctbl:model-data model))))
+  (length (ctbl:model-column-model model)))
 
 (defun ctbl:model-row-length (model)
   "[internal] Return the row number."
