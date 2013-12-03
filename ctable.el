@@ -836,9 +836,8 @@ bug), this function may return nil."
          (cols (ctbl:model-column-length model))
          (col-names (mapcar 'ctbl:cmodel-title
                             (ctbl:model-column-model model)))
-         (col-name (funcall ctbl:completing-read "Column name: "
-                            (with-current-buffer (buffer-name)
-                              col-names))))
+         (completion-ignore-case t)
+         (col-name (funcall ctbl:completing-read "Column name: " col-names)))
     (when (and cp cell-id)
       (ctbl:navi-goto-cell
        (ctbl:cell-id
