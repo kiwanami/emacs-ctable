@@ -1240,8 +1240,9 @@ This function assumes that the current buffer is the destination buffer."
                  cmodels model param)))))
     (setq column-formats (ctbl:render-get-formats cmodels column-widths))
     (catch 'ctbl:insert-break
-      (ctbl:render-main-header dest model param
-                               cmodels column-widths)
+      (when (ctbl:param-display-header param)
+        (ctbl:render-main-header dest model param
+                                 cmodels column-widths))
       (ctbl:render-main-content dest model param
                                 cmodels drows column-widths column-formats))
     ;; return the sorted list
@@ -1838,6 +1839,7 @@ WIDTH and HEIGHT are reference size of the table view."
   (interactive)
   (let ((param (copy-ctbl:param ctbl:default-rendering-param)))
     ;; rendering parameters
+    ;;(setf (ctbl:param-display-header param) nil)
     (setf (ctbl:param-fixed-header param) t)
     (setf (ctbl:param-hline-colors param)
           '((0 . "#00000") (1 . "#909090") (-1 . "#ff0000") (t . "#00ff00")))
