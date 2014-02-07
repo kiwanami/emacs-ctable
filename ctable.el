@@ -1,6 +1,6 @@
 ;;; ctable.el --- Table component for Emacs Lisp
 
-;; Copyright (C) 2011,2012,2013 SAKURAI Masashi
+;; Copyright (C) 2011, 2012, 2013, 2014 SAKURAI Masashi
 
 ;; Author: SAKURAI Masashi <m.sakurai at kiwanami.net>
 ;; URL: https://github.com/kiwanami/emacs-ctable
@@ -1608,9 +1608,9 @@ cell is truncated."
         (when (< limit-width (string-width str))
           (setq str (truncate-string-to-width (substring org 0)
                                               limit-width)))
-        (propertize str 'mouse-face 'highlight)
+        (setq str (propertize str 'mouse-face 'highlight))
         (unless (get-text-property 0 'help-echo str)
-          (propertize str 'help-echo org))
+          (setq str (propertize str 'help-echo org)))
         str)
     org))
 
