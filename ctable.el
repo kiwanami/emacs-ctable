@@ -43,6 +43,9 @@
 
 (eval-when-compile (require 'cl))
 
+(declare-function popup-tip "popup")
+(declare-function pos-tip-show "pos-tip")
+
 
 ;;; Models and Parameters
 
@@ -146,6 +149,9 @@ Emacs init file:
 
 (defvar ctbl:tooltip-method '(pos-tip popup minibuffer)
   "Preferred tooltip methods in order.")
+
+(defvar ctbl:component)
+(defvar ctbl:header-text)
 
 ;;; Faces
 
@@ -1497,7 +1503,7 @@ This function assumes that the current buffer is the destination buffer."
                     dest model (ctbl:cp-get-param cp) (ctbl:model-column-model model)
                     rows (ctbl:async-state-column-widths astate)
                     (ctbl:async-state-column-formats astate) begin-index)
-                   (delete-backward-char 1)
+                   (backward-delete-char 1)
                    (ctbl:async-state-update-status cp 'normal)
                    ;; append row data (side effect!)
                    (setf (ctbl:component-sorted-data cp)
@@ -1850,7 +1856,7 @@ WIDTH and HEIGHT are reference size of the table view."
     (setf (ctbl:param-bg-colors param)
           (lambda (model row-id col-id str)
             (cond ((string-match "CoCo" str) "LightPink")
-                  ((= 0 (% (1- row-index) 2)) "Darkseagreen1")
+                  ((= 0 (% (1- row-id) 2)) "Darkseagreen1")
                   (t nil))))
     (let ((cp
            (ctbl:create-table-component-buffer
