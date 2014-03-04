@@ -41,7 +41,7 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'cl))
+(require 'cl)
 
 (declare-function popup-tip "popup")
 (declare-function pos-tip-show "pos-tip")
@@ -1898,4 +1898,10 @@ WIDTH and HEIGHT are reference size of the table view."
 ;; (progn (eval-current-buffer) (ctbl:demo))
 
 (provide 'ctable)
+
+;; Local Variables:
+;; byte-compile-warnings: (not cl-functions)
+;; indent-tabs-mode: nil
+;; End:
+
 ;;; ctable.el ends here
