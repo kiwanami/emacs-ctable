@@ -912,6 +912,8 @@ bug), this function may return nil."
 
      ("g" . ctbl:action-update-buffer)
 
+     ("?" . ctbl:describe-bindings)
+
      ([mouse-1] . ctbl:navi-on-click)
      ("C-m" . ctbl:navi-on-click)
      ("RET" . ctbl:navi-on-click)
@@ -1601,6 +1603,21 @@ cell is truncated."
                                (lambda ()
                                  (ctbl:show-cell-in-tooltip t)
                                  (setq ctbl:tooltip-timer nil))))))
+
+
+;; help output
+
+(defun ctbl:describe-bindings ()
+  "Display a buffer showing a list of keys defined in the table."
+  (interactive)
+  (let ((keymap (get-text-property (point) 'keymap)))
+    (when keymap
+      (with-help-window (help-buffer)
+       (with-current-buffer (help-buffer)
+         (map-keymap (lambda (key value)
+                       (when (characterp key)
+                         (insert (format "%s	%s\n" (key-description (vector key)) value))))
+                     keymap))))))
 
 
 ;; Rendering utilities
