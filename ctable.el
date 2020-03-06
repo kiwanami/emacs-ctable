@@ -181,7 +181,7 @@ Emacs init file:
 
 (defun ctbl:define-keymap (keymap-list &optional prefix)
   "[internal] Keymap utility."
-  (let ((cl-map (make-sparse-keymap)))
+  (let ((map (make-sparse-keymap)))
     (mapc
      (lambda (i)
        (define-key map
