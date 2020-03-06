@@ -1,4 +1,4 @@
-;;; ctable.el --- Table component for Emacs Lisp
+;;; ctable.el --- Table component for Emacs Lisp -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2011, 2012, 2013, 2014 SAKURAI Masashi
 
@@ -352,7 +352,7 @@ calculated from the window that shows BUF or the selected window.
 The component object is stored at the buffer local variable
 `ctbl:component'.  CUSTOM-MAP is the additional keymap that is
 added to default keymap `ctbl:table-mode-map'."
-  (lexical-let
+  (let
       ((buffer (or buf (get-buffer-create (format "*Table: %d*" (ctbl:uid)))))
        (window (or (and buf (get-buffer-window buf)) (selected-window)))
        dest)
@@ -382,7 +382,7 @@ space.  This destination is employed to be embedded in the some
 application buffer.  Because this destination does not set up
 any modes and key maps for the buffer, the application that uses
 the ctable is responsible to manage the buffer and key maps."
-  (lexical-let
+  (let
       ((mark-begin mark-begin) (mark-end mark-end)
        (window (or (get-buffer-window buf) (selected-window))))
     (make-ctbl:dest
@@ -409,7 +409,7 @@ the ctable is responsible to manage the buffer and key maps."
 
 (defun ctbl:dest-init-inline (width height)
   "Create a text destination."
-  (lexical-let
+  (let
       ((buffer (get-buffer-create ctbl:dest-background-buffer))
        (window (selected-window))
        dest)
@@ -438,7 +438,7 @@ the ctable is responsible to manage the buffer and key maps."
   "[internal] Put a selection overlay on CELL-ID. The selection overlay can be
  put on some cells, calling this function many times.  This
  function does not manage the selections, just put the overlay."
-  (lexical-let (ols (row-id (car cell-id)) (col-id (cdr cell-id)))
+  (let (ols (row-id (car cell-id)) (col-id (cdr cell-id)))
     (ctbl:dest-with-region dest
       (ctbl:find-all-by-row-id
        dest row-id
@@ -583,7 +583,7 @@ HOOK is a function that has no argument."
            ;; asynchronous model
            ((ctbl:async-model-p
              (ctbl:model-data (ctbl:component-model component)))
-            (lexical-let ((cp component))
+            (let ((cp component))
               (ctbl:async-state-on-update cp)
               (ctbl:render-async-main
                dest
@@ -877,7 +877,7 @@ bug), this function may return nil."
 
 (defun ctbl:render-column-header-keymap (col-id)
   "[internal] Generate action handler on the header columns. (for header-line-format)"
-  (lexical-let ((col-id col-id))
+  (let ((col-id col-id))
     (let ((keymap (copy-keymap ctbl:column-header-keymap)))
       (define-key keymap [header-line mouse-1]
         (lambda ()
@@ -1041,7 +1041,7 @@ surplus width."
         for cm in cmodels
         for al = (ctbl:cmodel-align cm)
         collect
-        (lexical-let ((cw cw))
+        (let ((cw cw))
           (cond
            ((eq al 'left)
             (lambda (s) (ctbl:format-left cw s)))
@@ -1428,7 +1428,7 @@ panel-end      : end mark object for status panel
 (defun ctbl:render-async-main (dest model param rows-setter)
   "[internal] Rendering the table view for async data model.
 This function assumes that the current buffer is the destination buffer."
-  (lexical-let*
+  (let*
       ((dest dest) (model model) (param param) (rows-setter rows-setter)
        (amodel (ctbl:model-data model)) (buf (current-buffer))
        (cmodels (ctbl:model-column-model model)))
@@ -1478,7 +1478,7 @@ This function assumes that the current buffer is the destination buffer."
 
 (defun ctbl:render-async-continue (component)
   "[internal] Rendering subsequent data asynchronously."
-  (lexical-let*
+  (let*
       ((cp component) (dest (ctbl:component-dest cp)) (buf (current-buffer))
        (model  (ctbl:cp-get-model cp))
        (amodel (ctbl:model-data model))
@@ -1538,7 +1538,7 @@ to urge async data model to request next data chunk."
 (defun ctbl:async-model-wrapper (rows &optional init-num more-num)
   "This function wraps a list of row data in an asynchronous data
 model so as to avoid Emacs freezing with a large number of rows."
-  (lexical-let ((rows rows) (rest-rows rows)
+  (let ((rows rows) (rest-rows rows)
                 (init-num (or init-num 100))
                 (more-num (or more-num 100)))
     (make-ctbl:async-model
@@ -1690,7 +1690,7 @@ sides with the character PADDING."
   (let*
       ((comparator
         (lambda (ref)
-          (lexical-let
+          (let
               ((ref ref)
                (f (or (ctbl:cmodel-sorter (nth ref cmodels))
                       'ctbl:sort-string-lessp)))
@@ -1698,16 +1698,16 @@ sides with the character PADDING."
               (funcall f (nth ref i) (nth ref j))))))
        (negative-comparator
         (lambda (ref)
-          (lexical-let ((cp (funcall comparator ref)))
+          (let ((cp (funcall comparator ref)))
             (lambda (i j) (- (funcall cp i j))))))
        (to-bool
         (lambda (f)
-          (lexical-let ((f f))
+          (let ((f f))
             (lambda (i j)
               (< (funcall f i j) 0)))))
        (chain
         (lambda (fs)
-          (lexical-let ((fs fs))
+          (let ((fs fs))
             (lambda (i j)
               (cl-loop for f in fs
                     for v = (funcall f i j)
@@ -1822,7 +1822,7 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
       (let* ((dest (ctbl:dest-init-region (current-buffer) mark-begin mark-end width height))
              (cp (ctbl:cp-new dest model param))
              (after-update-func
-              (lexical-let ((keymap keymap) (cp cp))
+              (let ((keymap keymap) (cp cp))
                 (lambda ()
                   (ctbl:dest-with-region (ctbl:component-dest cp)
                     (let (buffer-read-only)
