@@ -427,5 +427,5 @@ If sorting function is needed, the application program must implement it manuall
 
 * * * * *
 
-(C) 2012,2013  SAKURAI Masashi  All rights reserved.
+(C) 2011-2021  SAKURAI Masashi  All rights reserved.
 m.sakurai at kiwanami.net

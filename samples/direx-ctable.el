@@ -34,14 +34,14 @@
   "[internal] "
   (with-current-buffer direx-buf
     (goto-char (point-min))
-    (loop with data-list = nil
-          with goaheadp = t
-          for item = (direx:item-at-point)
-          while goaheadp do 
-          (when (and item (direx:item-visible-p item))
-            (push item data-list))
-          (setq goaheadp (zerop (forward-line)))
-          finally return (nreverse data-list))))
+    (cl-loop with data-list = nil
+             with goaheadp = t
+             for item = (direx:item-at-point)
+             while goaheadp do 
+             (when (and item (direx:item-visible-p item))
+               (push item data-list))
+             (setq goaheadp (zerop (forward-line)))
+             finally return (nreverse data-list))))
 
 
 (defun dxt:item-render (item)
@@ -53,26 +53,26 @@
 
 (defun dxt:make-model-data-sort-prop (row item)
   "[internal] "
-  (loop with head = (ctbl:format-left 
-                     64 (file-name-directory (direx:file-full-name (direx:item-tree item))))
-        for i in row
-        collect
-        (if (stringp i)
-            (propertize i 'dxt:sorter (message (format "%s%64s" head i))) i)))
+  (cl-loop with head = (ctbl:format-left 
+                        64 (file-name-directory (direx:file-full-name (direx:item-tree item))))
+           for i in row
+           collect
+           (if (stringp i)
+               (propertize i 'dxt:sorter (message (format "%s%64s" head i))) i)))
 
 (defun dxt:make-model-data (buf)
   "[internal] "
-  (loop for i in (dxt:collect-entries buf)
-        for itree = (direx:item-tree i)
-        for attr = (file-attributes (direx:file-full-name itree))
-        collect
-        (dxt:make-model-data-sort-prop
-         (list 
-          (dxt:item-render i)
-          (if (direx:item-leaf-p i)
-              (format "%d" (nth 7 attr)) " ")
-          (format-time-string   "%Y/%m/%d %H:%M:%S" (nth 5 attr))
-          i) i)))
+  (cl-loop for i in (dxt:collect-entries buf)
+           for itree = (direx:item-tree i)
+           for attr = (file-attributes (direx:file-full-name itree))
+           collect
+           (dxt:make-model-data-sort-prop
+            (list 
+             (dxt:item-render i)
+             (if (direx:item-leaf-p i)
+                 (format "%d" (nth 7 attr)) " ")
+             (format-time-string   "%Y/%m/%d %H:%M:%S" (nth 5 attr))
+             i) i)))
 
 (defun dxt:make-model (buf)
   "[internal] "
@@ -128,7 +128,7 @@
   (interactive)
   (dxt:open default-directory))
 
-;; (progn (eval-current-buffer) (dxt:open-here))
+;; (progn (eval-buffer) (dxt:open-here))
 
 (provide 'direx-ctable)
 ;;; direx-ctable.el ends here

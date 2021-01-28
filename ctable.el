@@ -1,10 +1,11 @@
-;;; ctable.el --- Table component for Emacs Lisp
+;;; ctable.el --- Table component for Emacs Lisp -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011, 2012, 2013, 2014 SAKURAI Masashi
+;; Copyright (C) 2011-2021 SAKURAI Masashi
 
 ;; Author: SAKURAI Masashi <m.sakurai at kiwanami.net>
 ;; URL: https://github.com/kiwanami/emacs-ctable
-;; Version: 0.1.2
+;; Version: 0.1.3
+;; Package-Requires: ((emacs "24.3") (cl-lib "0.5"))
 ;; Keywords: table
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -41,7 +42,7 @@
 
 ;;; Code:
 
-(require 'cl)
+(require 'cl-lib)
 
 (declare-function popup-tip "popup")
 (declare-function pos-tip-show "pos-tip")
@@ -49,7 +50,7 @@
 
 ;;; Models and Parameters
 
-(defstruct ctbl:model
+(cl-defstruct ctbl:model
   "Table model structure
 
 data : Table data as a list of rows. A row contains a list of columns.
@@ -61,7 +62,7 @@ sort-state : The current sort order as a list of column indexes.
   data column-model sort-state)
 
 
-(defstruct ctbl:async-model
+(cl-defstruct ctbl:async-model
   "Asynchronous data model
 
 request  : Data request function which receives 4 arguments (begin-num length fn(row-list) fe(errmsg)).
@@ -79,7 +80,7 @@ For forward compatibility, these callback functions should have a `&rest' keywor
   request (init-num 20) (more-num 20) reset cancel)
 
 
-(defstruct ctbl:cmodel
+(cl-defstruct ctbl:cmodel
   "Table column model structure
 
 title  : title string.
@@ -95,7 +96,7 @@ click-hooks : a list of functions for header clicking with two arguments
   (click-hooks '(ctbl:cmodel-sort-action)))
 
 
-(defstruct ctbl:param
+(cl-defstruct ctbl:param
   "Rendering parameters
 
 display-header : if t, display the header row with column models.
@@ -208,14 +209,14 @@ Emacs init file:
 
 (defun ctbl:uid ()
   "[internal] Generate an unique number."
-  (incf ctbl:uid))
+  (cl-incf ctbl:uid))
 
 (defun ctbl:fill-keymap-property (begin end keymap)
   "[internal] Put the given text property to the region between BEGIN and END.
 If the text already has some keymap property, the text is skipped."
   (save-excursion
     (goto-char begin)
-    (loop with pos = begin with nxt = nil
+    (cl-loop with pos = begin with nxt = nil
           until (or (null pos) (<= end pos))
           when (get-text-property pos 'keymap) do
           (setq pos (next-single-property-change pos 'keymap))
@@ -264,7 +265,7 @@ If data is an instance of `ctbl:async-model', this function do nothing."
 
 ;; Component
 
-(defstruct ctbl:component
+(cl-defstruct ctbl:component
   "Component
 
 This structure defines attributes of the table component.
@@ -287,7 +288,7 @@ states       : alist of arbitrary data for internal use"
 
 ;; Rendering Destination
 
-(defstruct ctbl:dest
+(cl-defstruct ctbl:dest
   "Rendering Destination
 
 This structure object is the abstraction of the rendering
@@ -351,7 +352,7 @@ calculated from the window that shows BUF or the selected window.
 The component object is stored at the buffer local variable
 `ctbl:component'.  CUSTOM-MAP is the additional keymap that is
 added to default keymap `ctbl:table-mode-map'."
-  (lexical-let
+  (let
       ((buffer (or buf (get-buffer-create (format "*Table: %d*" (ctbl:uid)))))
        (window (or (and buf (get-buffer-window buf)) (selected-window)))
        dest)
@@ -381,7 +382,7 @@ space.  This destination is employed to be embedded in the some
 application buffer.  Because this destination does not set up
 any modes and key maps for the buffer, the application that uses
 the ctable is responsible to manage the buffer and key maps."
-  (lexical-let
+  (let
       ((mark-begin mark-begin) (mark-end mark-end)
        (window (or (get-buffer-window buf) (selected-window))))
     (make-ctbl:dest
@@ -408,7 +409,7 @@ the ctable is responsible to manage the buffer and key maps."
 
 (defun ctbl:dest-init-inline (width height)
   "Create a text destination."
-  (lexical-let
+  (let
       ((buffer (get-buffer-create ctbl:dest-background-buffer))
        (window (selected-window))
        dest)
@@ -429,7 +430,7 @@ the ctable is responsible to manage the buffer and key maps."
 
 (defun ctbl:dest-ol-selection-clear (dest)
   "[internal] Clear the selection overlays on the current table view."
-  (loop for i in (ctbl:dest-select-ol dest)
+  (cl-loop for i in (ctbl:dest-select-ol dest)
         do (delete-overlay i))
   (setf (ctbl:dest-select-ol dest) nil))
 
@@ -437,7 +438,7 @@ the ctable is responsible to manage the buffer and key maps."
   "[internal] Put a selection overlay on CELL-ID. The selection overlay can be
  put on some cells, calling this function many times.  This
  function does not manage the selections, just put the overlay."
-  (lexical-let (ols (row-id (car cell-id)) (col-id (cdr cell-id)))
+  (let (ols (row-id (car cell-id)) (col-id (cdr cell-id)))
     (ctbl:dest-with-region dest
       (ctbl:find-all-by-row-id
        dest row-id
@@ -582,7 +583,7 @@ HOOK is a function that has no argument."
            ;; asynchronous model
            ((ctbl:async-model-p
              (ctbl:model-data (ctbl:component-model component)))
-            (lexical-let ((cp component))
+            (let ((cp component))
               (ctbl:async-state-on-update cp)
               (ctbl:render-async-main
                dest
@@ -621,21 +622,21 @@ HOOK is a function that has no argument."
 
 (defun ctbl:cp-fire-click-hooks (component)
   "[internal] Call click hook functions of the component with no arguments."
-  (loop for f in (ctbl:component-click-hooks component)
+  (cl-loop for f in (ctbl:component-click-hooks component)
         do (condition-case err
                (funcall f)
              (error (message "CTable: Click / Hook error %S [%s]" f err)))))
 
 (defun ctbl:cp-fire-selection-change-hooks (component)
   "[internal] Call selection change hook functions of the component with no arguments."
-  (loop for f in (ctbl:component-selection-change-hooks component)
+  (cl-loop for f in (ctbl:component-selection-change-hooks component)
         do (condition-case err
                (funcall f)
              (error (message "CTable: Selection change / Hook error %S [%s]" f err)))))
 
 (defun ctbl:cp-fire-update-hooks (component)
   "[internal] Call update hook functions of the component with no arguments."
-  (loop for f in (ctbl:component-update-hooks component)
+  (cl-loop for f in (ctbl:component-update-hooks component)
         do (condition-case err
                (funcall f)
              (error (message "Ctable: Update / Hook error %S [%s]" f err)))))
@@ -648,18 +649,18 @@ HOOK is a function that has no argument."
          (max (ctbl:dest-point-max dest))
          (mid (/ (+ min max) 2)))
     (save-excursion
-      (loop for next = (next-single-property-change mid 'ctbl:cell-id nil max)
+      (cl-loop for next = (next-single-property-change mid 'ctbl:cell-id nil max)
             for cur-row-id = (and next (car (ctbl:cursor-to-cell next)))
             do
             (cond
-             ((>= next max) (return (point)))
+             ((>= next max) (cl-return (point)))
              ((null cur-row-id) (setq mid next))
              ((= cur-row-id row-id)
               (goto-char mid) (beginning-of-line)
-              (return (point)))
+              (cl-return (point)))
              ((and (< row-id-lim cur-row-id) (< cur-row-id row-id))
               (goto-char mid) (beginning-of-line) (forward-line)
-              (return (point)))
+              (cl-return (point)))
              ((< cur-row-id row-id)
               (setq min mid)
               (setq mid (/ (+ min max) 2)))
@@ -671,13 +672,13 @@ HOOK is a function that has no argument."
   "[internal] Return a point where the text property `ctbl:cell-id'
 is equal to cell-id in the current table view. If CELL-ID is not
 found in the current view, return nil."
-  (loop with pos = (ctbl:find-position-fast dest cell-id)
+  (cl-loop with pos = (ctbl:find-position-fast dest cell-id)
         with end = (ctbl:dest-point-max dest)
         for next = (next-single-property-change pos 'ctbl:cell-id nil end)
         for text-cell = (and next (ctbl:cursor-to-cell next))
         while (and next (< next end)) do
         (if (and text-cell (equal cell-id text-cell))
-            (return next))
+            (cl-return next))
         (setq pos next)))
 
 (defun ctbl:find-all-by-cell-id (dest cell-id func)
@@ -685,7 +686,7 @@ found in the current view, return nil."
 text-property `ctbl:cell-id' is equal to CELL-ID. The argument function FUNC
 receives two arguments, begin position and end one. This function is
 mainly used at functions for putting overlays."
-  (loop with pos = (ctbl:find-position-fast dest cell-id)
+  (cl-loop with pos = (ctbl:find-position-fast dest cell-id)
         with end = (ctbl:dest-point-max dest)
         for next = (next-single-property-change pos 'ctbl:cell-id nil end)
         for text-id = (and next (ctbl:cursor-to-cell next))
@@ -693,7 +694,7 @@ mainly used at functions for putting overlays."
         (if (and text-id (equal cell-id text-id))
             (let ((cend (next-single-property-change
                          next 'ctbl:cell-id nil end)))
-              (return (funcall func next cend))))
+              (cl-return (funcall func next cend))))
         (setq pos next)))
 
 (defun ctbl:find-all-by-row-id (dest row-id func)
@@ -702,7 +703,7 @@ row-id of the text-property `ctbl:cell-id' is equal to
 ROW-ID. The argument function FUNC receives three arguments,
 cell-id, begin position and end one. This function is mainly used
 at functions for putting overlays."
-  (loop with pos = (ctbl:find-position-fast dest (cons row-id nil))
+  (cl-loop with pos = (ctbl:find-position-fast dest (cons row-id nil))
         with end = (ctbl:dest-point-max dest)
         for next = (next-single-property-change pos 'ctbl:cell-id nil end)
         for text-id = (and next (ctbl:cursor-to-cell next))
@@ -714,7 +715,7 @@ at functions for putting overlays."
                          next 'ctbl:cell-id nil end)))
               (funcall func text-id next cend)))
            ((< row-id (car text-id))
-            (return nil))))
+            (cl-return nil))))
         (setq pos next)))
 
 (defun ctbl:find-first-cell (dest)
@@ -751,7 +752,7 @@ bug), this function may return nil."
                       (if (null cmds) (ctbl:cursor-to-cell)
                         (ignore-errors
                           (funcall (car cmds)) (funcall get (cdr cmds)))))))
-        (or (loop for i in `((,d) (,r) (,u) (,l)
+        (or (cl-loop for i in `((,d) (,r) (,u) (,l)
                              (,d ,r) (,d ,l) (,u ,r) (,u ,l)
                              (,d ,d) (,r ,r) (,u ,u) (,l ,l))
                   for id = (funcall get i)
@@ -848,7 +849,7 @@ bug), this function may return nil."
       (ctbl:navi-goto-cell
        (ctbl:cell-id
         row-id
-        (position col-name col-names :test 'equal))))))
+        (cl-position col-name col-names :test 'equal))))))
 
 (defun ctbl:action-update-buffer ()
   "Update action for the latest table model."
@@ -867,7 +868,7 @@ bug), this function may return nil."
 (defun ctbl:fire-column-header-action (cp col-id)
   "[internal] Execute action handlers on the header columns."
   (when (and cp col-id)
-    (loop with cmodel = (nth col-id (ctbl:model-column-model (ctbl:cp-get-model cp)))
+    (cl-loop with cmodel = (nth col-id (ctbl:model-column-model (ctbl:cp-get-model cp)))
           for f in (ctbl:cmodel-click-hooks cmodel)
           do (condition-case err
                  (funcall f cp col-id)
@@ -876,7 +877,7 @@ bug), this function may return nil."
 
 (defun ctbl:render-column-header-keymap (col-id)
   "[internal] Generate action handler on the header columns. (for header-line-format)"
-  (lexical-let ((col-id col-id))
+  (let ((col-id col-id))
     (let ((keymap (copy-keymap ctbl:column-header-keymap)))
       (define-key keymap [header-line mouse-1]
         (lambda ()
@@ -952,8 +953,8 @@ bug), this function may return nil."
   "[internal] Return a list of rows. This function makes side effects:
 cell widths are stored at COLUMN-WIDTHS, longer cell strings are truncated by
 maximum width of the column models."
-  (loop for row in rows collect
-        (loop for c in row
+  (cl-loop for row in rows collect
+        (cl-loop for c in row
               for cm in cmodels
               for cwmax = (ctbl:cmodel-max-width cm)
               for i from 0
@@ -975,7 +976,7 @@ function expands columns.  The residual width is distributed over
 the columns.  If TOTAL-WIDTHS is longer than sum of
 COLUMN-WIDTHS, this function shrinks columns to reduce the
 surplus width."
-  (let ((init-total (loop for i in column-widths sum i)))
+  (let ((init-total (cl-loop for i in column-widths sum i)))
     (cond
      ((or (null total-width)
           (= total-width init-total)) column-widths)
@@ -989,58 +990,58 @@ surplus width."
 (defun ctbl:render-adjust-cell-width-shrink (cmodels column-widths total-width init-total )
   "[internal] shrink column widths."
   (let* ((column-widths (copy-sequence column-widths))
-         (column-indexes (loop for i from 0 below (length cmodels) collect i))
+         (column-indexes (cl-loop for i from 0 below (length cmodels) collect i))
          (residual (- init-total total-width)))
-    (loop for cnum = (length column-indexes)
+    (cl-loop for cnum = (length column-indexes)
           until (or (= 0 cnum) (= 0 residual))
           do
-          (loop with ave-shrink = (max 1 (/ residual cnum))
+          (cl-loop with ave-shrink = (max 1 (/ residual cnum))
                 for idx in column-indexes
                 for cmodel = (nth idx cmodels)
                 for cwidth = (nth idx column-widths)
                 for min-width = (or (ctbl:cmodel-min-width cmodel) 1)
                 do
                 (cond
-                 ((<= residual 0) (return)) ; complete
+                 ((<= residual 0) (cl-return)) ; complete
                  ((<= cwidth min-width)     ; reject
                   (setq column-indexes (delete idx column-indexes)))
                  (t ; reduce
                   (let ((next-width (max 1 (- cwidth ave-shrink))))
-                    (incf residual (- next-width cwidth))
+                    (cl-incf residual (- next-width cwidth))
                     (setf (nth idx column-widths) next-width))))))
     column-widths))
 
 (defun ctbl:render-adjust-cell-width-expand (cmodels column-widths total-width init-total )
   "[internal] expand column widths."
   (let* ((column-widths (copy-sequence column-widths))
-         (column-indexes (loop for i from 0 below (length cmodels) collect i))
+         (column-indexes (cl-loop for i from 0 below (length cmodels) collect i))
          (residual (- total-width init-total)))
-    (loop for cnum = (length column-indexes)
+    (cl-loop for cnum = (length column-indexes)
           until (or (= 0 cnum) (= 0 residual))
           do
-          (loop with ave-expand = (max 1 (/ residual cnum))
+          (cl-loop with ave-expand = (max 1 (/ residual cnum))
                 for idx in column-indexes
                 for cmodel = (nth idx cmodels)
                 for cwidth = (nth idx column-widths)
                 for max-width = (or (ctbl:cmodel-max-width cmodel) total-width)
                 do
                 (cond
-                 ((<= residual 0) (return)) ; complete
+                 ((<= residual 0) (cl-return)) ; complete
                  ((<= max-width cwidth)     ; reject
                   (setq column-indexes (delete idx column-indexes)))
                  (t ; expand
                   (let ((next-width (min max-width (+ cwidth ave-expand))))
-                    (incf residual (- cwidth next-width))
+                    (cl-incf residual (- cwidth next-width))
                     (setf (nth idx column-widths) next-width))))))
     column-widths))
 
 (defun ctbl:render-get-formats (cmodels column-widths)
   "[internal] Return a list of the format functions."
-  (loop for cw in column-widths
+  (cl-loop for cw in column-widths
         for cm in cmodels
         for al = (ctbl:cmodel-align cm)
         collect
-        (lexical-let ((cw cw))
+        (let ((cw cw))
           (cond
            ((eq al 'left)
             (lambda (s) (ctbl:format-left cw s)))
@@ -1139,7 +1140,7 @@ surplus width."
       (ctbl:render-hline-color
        (concat
         (if (ctbl:render-draw-vline-p model vparam 0) left)
-        (loop with ret = nil with endi = (length column-widths)
+        (cl-loop with ret = nil with endi = (length column-widths)
               for cw in column-widths
               for ci from 1
               for endp = (equal ci endi)
@@ -1162,7 +1163,7 @@ surplus width."
                   (list (ctbl:render-vline-color V model param 0))
                 nil))
     ;; content line
-    (loop with param-vl = (ctbl:param-draw-vlines param)
+    (cl-loop with param-vl = (ctbl:param-draw-vlines param)
           with param-vc = (ctbl:param-vline-colors param)
           with endi = (length columns)
           for i from 1 for endp = (equal i endi)
@@ -1186,20 +1187,20 @@ surplus width."
   (let ((sum 0))
     ;; left border line
     (when (ctbl:render-draw-vline-p model (ctbl:param-draw-vlines param) 0)
-      (incf sum))
+      (cl-incf sum))
     ;; content line
-    (loop with param-vl = (ctbl:param-draw-vlines param)
+    (cl-loop with param-vl = (ctbl:param-draw-vlines param)
           with endi = (length cmodels)
           for i from 1 upto (length cmodels)
           for endp = (equal i endi) do
           (when (and (ctbl:render-draw-vline-p
                       model (ctbl:param-draw-vlines param) i)
                      (not endp))
-            (incf sum)))
+            (cl-incf sum)))
     ;; right border line
     (when (ctbl:render-draw-vline-p
            model (ctbl:param-draw-vlines param) -1)
-      (incf sum))
+      (cl-incf sum))
     sum))
 
 (defun ctbl:dest-width-get (dest)
@@ -1231,7 +1232,7 @@ This function assumes that the current buffer is the destination buffer."
                 (copy-sequence (ctbl:model-data model)) cmodels
                 (ctbl:model-sort-state model)))
          (column-widths
-          (loop for c in cmodels
+          (cl-loop for c in cmodels
                 for title = (ctbl:cmodel-title c)
                 collect (max (or (ctbl:cmodel-min-width c) 0)
                              (or (and title (length title)) 0))))
@@ -1261,7 +1262,7 @@ This function assumes that the current buffer is the destination buffer."
   (let ((EOL "\n")
         (header-string
          (ctbl:render-join-columns
-          (loop for cm in cmodels
+          (cl-loop for cm in cmodels
                 for i from 0
                 for cw in column-widths
                 collect
@@ -1295,7 +1296,7 @@ This function assumes that the current buffer is the destination buffer."
   (unless begin-index
     (setq begin-index 0))
   (let ((EOL "\n") (row-num (length rows)))
-    (loop for cols in rows
+    (cl-loop for cols in rows
           for row-index from begin-index
           do
           (insert
@@ -1303,7 +1304,7 @@ This function assumes that the current buffer is the destination buffer."
              column-widths model param (1+ row-index)))
           (insert
             (ctbl:render-join-columns
-             (loop for i in cols
+             (cl-loop for i in cols
                    for s = (if (stringp i) i (format "%s" i))
                    for fmt in column-formats
                    for cw in column-widths
@@ -1333,7 +1334,7 @@ This function assumes that the current buffer is the destination buffer."
 
 ;; async data / internal state
 
-(defstruct ctbl:async-state
+(cl-defstruct ctbl:async-state
   "Rendering State [internal]
 
 status : symbol ->
@@ -1364,7 +1365,7 @@ panel-end      : end mark object for status panel
          (amodel (ctbl:model-data (ctbl:cp-get-model cp)))
          (astate (ctbl:cp-states-get cp 'async-state)))
     (when cp
-      (case (ctbl:async-state-status astate)
+      (cl-case (ctbl:async-state-status astate)
         ('normal
          (ctbl:render-async-continue cp))
         ('requested
@@ -1394,7 +1395,7 @@ panel-end      : end mark object for status panel
         (goto-char begin)
         (insert
          (propertize
-          (case (ctbl:async-state-status astate)
+          (cl-case (ctbl:async-state-status astate)
             ('done
              (ctbl:format-center width "No more data."))
             ('requested
@@ -1427,7 +1428,7 @@ panel-end      : end mark object for status panel
 (defun ctbl:render-async-main (dest model param rows-setter)
   "[internal] Rendering the table view for async data model.
 This function assumes that the current buffer is the destination buffer."
-  (lexical-let*
+  (let*
       ((dest dest) (model model) (param param) (rows-setter rows-setter)
        (amodel (ctbl:model-data model)) (buf (current-buffer))
        (cmodels (ctbl:model-column-model model)))
@@ -1438,7 +1439,7 @@ This function assumes that the current buffer is the destination buffer."
        (with-current-buffer buf
          (let (buffer-read-only drows column-formats
               (column-widths
-               (loop for c in cmodels
+               (cl-loop for c in cmodels
                      for title = (ctbl:cmodel-title c)
                      collect (max (or (ctbl:cmodel-min-width c) 0)
                                   (or (and title (length title)) 0))))
@@ -1465,7 +1466,7 @@ This function assumes that the current buffer is the destination buffer."
                    (make-ctbl:async-state
                     :status 'normal
                     :actual-width (+ (ctbl:render-sum-vline-widths cmodels model param)
-                                     (loop for i in column-widths sum i))
+                                     (cl-loop for i in column-widths sum i))
                     :column-widths column-widths :column-formats column-formats
                     :next-index (length rows)
                     :panel-begin mark-panel-begin :panel-end mark-panel-end))
@@ -1477,7 +1478,7 @@ This function assumes that the current buffer is the destination buffer."
 
 (defun ctbl:render-async-continue (component)
   "[internal] Rendering subsequent data asynchronously."
-  (lexical-let*
+  (let*
       ((cp component) (dest (ctbl:component-dest cp)) (buf (current-buffer))
        (model  (ctbl:cp-get-model cp))
        (amodel (ctbl:model-data model))
@@ -1537,7 +1538,7 @@ to urge async data model to request next data chunk."
 (defun ctbl:async-model-wrapper (rows &optional init-num more-num)
   "This function wraps a list of row data in an asynchronous data
 model so as to avoid Emacs freezing with a large number of rows."
-  (lexical-let ((rows rows) (rest-rows rows)
+  (let ((rows rows) (rest-rows rows)
                 (init-num (or init-num 100))
                 (more-num (or more-num 100)))
     (make-ctbl:async-model
@@ -1549,13 +1550,13 @@ model so as to avoid Emacs freezing with a large number of rows."
          ((null rest-rows) nil)
          (t
           (nreverse
-           (loop with pos = rest-rows
+           (cl-loop with pos = rest-rows
                  with ret = nil
                  for i from 0 below len
                  do
                  (push (car pos) ret)
                  (setq pos (cdr pos))
-                 (unless pos (return ret))
+                 (unless pos (cl-return ret))
                  finally return ret)))))
        (when rest-rows
          (setq rest-rows (nthcdr len rest-rows))))
@@ -1689,7 +1690,7 @@ sides with the character PADDING."
   (let*
       ((comparator
         (lambda (ref)
-          (lexical-let
+          (let
               ((ref ref)
                (f (or (ctbl:cmodel-sorter (nth ref cmodels))
                       'ctbl:sort-string-lessp)))
@@ -1697,24 +1698,24 @@ sides with the character PADDING."
               (funcall f (nth ref i) (nth ref j))))))
        (negative-comparator
         (lambda (ref)
-          (lexical-let ((cp (funcall comparator ref)))
+          (let ((cp (funcall comparator ref)))
             (lambda (i j) (- (funcall cp i j))))))
        (to-bool
         (lambda (f)
-          (lexical-let ((f f))
+          (let ((f f))
             (lambda (i j)
               (< (funcall f i j) 0)))))
        (chain
         (lambda (fs)
-          (lexical-let ((fs fs))
+          (let ((fs fs))
             (lambda (i j)
-              (loop for f in fs
+              (cl-loop for f in fs
                     for v = (funcall f i j)
                     unless (eq 0 v)
                     return v
                     finally return 0))))))
     (sort rows
-          (loop with fs = nil
+          (cl-loop with fs = nil
                 for o in (reverse (copy-sequence orders))
                 for gen = (if (< 0 o) comparator negative-comparator)
                 for f = (funcall gen (1- (abs o)))
@@ -1736,7 +1737,7 @@ sides with the character PADDING."
 
 ;; buffer
 
-(defun* ctbl:open-table-buffer(&key buffer width height custom-map model param)
+(cl-defun ctbl:open-table-buffer (&key buffer width height custom-map model param)
   "Open a table buffer simply.
 This function uses the function
 `ctbl:create-table-component-buffer' internally."
@@ -1745,7 +1746,7 @@ This function uses the function
              :custom-map custom-map :model model :param param)))
     (switch-to-buffer (ctbl:cp-get-buffer cp))))
 
-(defun* ctbl:create-table-component-buffer(&key buffer width height custom-map model param)
+(cl-defun ctbl:create-table-component-buffer (&key buffer width height custom-map model param)
   "Return a table buffer with some customize parameters.
 
 This function binds the component object at the
@@ -1796,9 +1797,9 @@ CUSTOM-MAP is the additional keymap that is added to default keymap `ctbl:table-
                       (and (car rows) (length (car rows)))))
          (column-models
           (if header-row
-              (loop for i in header-row
+              (cl-loop for i in header-row
                     collect (make-ctbl:cmodel :title (format "%s" i) :min-width 5))
-            (loop for i from 0 below col-num
+            (cl-loop for i from 0 below col-num
                   for ch = (char-to-string (+ ?A i))
                   collect (make-ctbl:cmodel :title ch :min-width 5)))))
     (make-ctbl:model
@@ -1806,7 +1807,7 @@ CUSTOM-MAP is the additional keymap that is added to default keymap `ctbl:table-
 
 ;; region
 
-(defun* ctbl:create-table-component-region(&key width height keymap model param)
+(cl-defun ctbl:create-table-component-region (&key width height keymap model param)
   "Insert markers of the rendering destination at current point and display the table view.
 
 This function returns a component object and stores it at the text property `ctbl:component'.
@@ -1821,7 +1822,7 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
       (let* ((dest (ctbl:dest-init-region (current-buffer) mark-begin mark-end width height))
              (cp (ctbl:cp-new dest model param))
              (after-update-func
-              (lexical-let ((keymap keymap) (cp cp))
+              (let ((keymap keymap) (cp cp))
                 (lambda ()
                   (ctbl:dest-with-region (ctbl:component-dest cp)
                     (let (buffer-read-only)
@@ -1837,7 +1838,7 @@ KEYMAP is the keymap that is put to the text property `keymap'. If KEYMAP is nil
 
 ;; inline
 
-(defun* ctbl:get-table-text(&key width height model param)
+(cl-defun ctbl:get-table-text (&key width height model param)
   "Return a text that is drew the table view.
 
 In this case, the rendering destination object is disposable. So,
@@ -1912,7 +1913,7 @@ WIDTH and HEIGHT are reference size of the table view."
       (ctbl:cp-add-update-hook cp (lambda () (message "CTable : Update Hook")))
       (switch-to-buffer (ctbl:cp-get-buffer cp)))))
 
-;; (progn (eval-current-buffer) (ctbl:demo))
+;; (progn (eval-buffer) (ctbl:demo))
 
 (provide 'ctable)
 
