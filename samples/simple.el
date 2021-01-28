@@ -112,7 +112,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Event handling
 
-(lexical-let*
+(let*
     ((column-model ; column model
       (list (make-ctbl:cmodel
              :title "A" :sorter 'ctbl:sort-number-lessp
@@ -151,7 +151,7 @@
                  ;; increment ID column
                  (when (= 0 (cdr (ctbl:cp-get-selected component)))
                    (message ">> %S" row)
-                   (incf (car row)))
+                   (cl-incf (car row)))
                  (ctbl:cp-update component)))) ; update table
 
   ;; Selection change event handler

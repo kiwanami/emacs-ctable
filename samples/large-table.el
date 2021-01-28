@@ -1,4 +1,4 @@
-;;; An asynchronous data model sample for ctable.el 
+;;; An asynchronous data model sample for ctable.el -*- lexical-binding: t; -*-
 
 (require 'ctable)
 (require 'deferred)
@@ -10,7 +10,7 @@
 (defun ctbl:sync-demo1 ()
   (interactive)
   (ctbl:open-table-buffer-easy
-   (loop with lim = 4000
+   (cl-loop with lim = 4000
          for i from 0 upto lim
          for d = (/ (random 1000) 1000.0)
          collect 
@@ -51,24 +51,24 @@
 
 (defvar ctbl:async-demo-timer nil)
 
-(defun ctbl:async-demo-request (row-num len responsef errorf &rest)
-  (lexical-let 
+(defun ctbl:async-demo-request (row-num len responsef errorf &rest _)
+  (let 
       ((row-num row-num) (len len)
        (responsef responsef) (errorf errorf))
-  (setq ctbl:async-demo-timer
-        (deferred:$
+    (setq ctbl:async-demo-timer
+          (deferred:$
           (deferred:wait 500)
           (deferred:nextc it
             (lambda (x) 
               (setq ctbl:async-demo-timer nil)
               (funcall responsef
                        (if (< 500 row-num) nil
-                         (loop with lim = 100
-                               for i from row-num below (+ row-num len)
-                               for d = (/ (random 1000) 1000.0)
-                               collect
-                               (list i d (exp (- (/ i 1.0 lim)))
-                                     (exp (* (- (/ i 1.0 lim)) d))))))))))))
+                         (cl-loop with lim = 100
+                                  for i from row-num below (+ row-num len)
+                                  for d = (/ (random 1000) 1000.0)
+                                  collect
+                                  (list i d (exp (- (/ i 1.0 lim)))
+                                        (exp (* (- (/ i 1.0 lim)) d))))))))))))
 
 (defun ctbl:async-demo-reset (&rest)
   (message "RESET async data!!"))
@@ -77,7 +77,7 @@
   (when ctbl:async-demo-timer
     (deferred:cancel ctbl:async-demo-timer)))
 
-;; (progn (eval-current-buffer) (ctbl:async-demo))
+;; (progn (eval-buffer) (ctbl:async-demo))
 
 
 
@@ -88,7 +88,7 @@
   (interactive)
   (let* ((async-model ; wrapping a huge data in async-data-model
           (ctbl:async-model-wrapper
-           (loop with lim = 4000
+           (cl-loop with lim = 4000
                  for i from 0 upto lim
                  for d = (/ (random 1000) 1000.0)
                  collect 

@@ -1,10 +1,10 @@
 ;;; ctable.el --- Table component for Emacs Lisp -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011, 2012, 2013, 2014 SAKURAI Masashi
+;; Copyright (C) 2011-2021 SAKURAI Masashi
 
 ;; Author: SAKURAI Masashi <m.sakurai at kiwanami.net>
 ;; URL: https://github.com/kiwanami/emacs-ctable
-;; Version: 0.1.2
+;; Version: 0.1.3
 ;; Package-Requires: ((emacs "24.3") (cl-lib "0.5"))
 ;; Keywords: table
 
@@ -1913,7 +1913,7 @@ WIDTH and HEIGHT are reference size of the table view."
       (ctbl:cp-add-update-hook cp (lambda () (message "CTable : Update Hook")))
       (switch-to-buffer (ctbl:cp-get-buffer cp)))))
 
-;; (progn (eval-current-buffer) (ctbl:demo))
+;; (progn (eval-buffer) (ctbl:demo))
 
 (provide 'ctable)
 
