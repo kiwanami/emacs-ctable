@@ -310,7 +310,7 @@ select-ol   : a list of overlays for selection"
 (eval-when-compile
   (defmacro ctbl:dest-with-region (dest &rest body)
     (declare (debug (form &rest form)))
-    (let (($dest (gensym)))
+    (let (($dest (cl-gensym)))
       `(let ((,$dest ,dest))
          (with-current-buffer (ctbl:dest-buffer ,$dest)
            (save-restriction
